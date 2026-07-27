@@ -9,33 +9,22 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VerifierRouteImport } from './routes/verifier'
-import { Route as OfficierRouteImport } from './routes/officier'
-import { Route as CitoyenRouteImport } from './routes/citoyen'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AgentRouteImport } from './routes/agent'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AgentRouteImport } from './routes/agent'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CitoyenRouteImport } from './routes/citoyen'
+import { Route as OfficierRouteImport } from './routes/officier'
+import { Route as VerifierRouteImport } from './routes/verifier'
 import { Route as AuthenticatedMonEspaceRouteImport } from './routes/_authenticated/mon-espace'
 
-const VerifierRoute = VerifierRouteImport.update({
-  id: '/verifier',
-  path: '/verifier',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OfficierRoute = OfficierRouteImport.update({
-  id: '/officier',
-  path: '/officier',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CitoyenRoute = CitoyenRouteImport.update({
-  id: '/citoyen',
-  path: '/citoyen',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentRoute = AgentRouteImport.update({
@@ -43,13 +32,24 @@ const AgentRoute = AgentRouteImport.update({
   path: '/agent',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const CitoyenRoute = CitoyenRouteImport.update({
+  id: '/citoyen',
+  path: '/citoyen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OfficierRoute = OfficierRouteImport.update({
+  id: '/officier',
+  path: '/officier',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifierRoute = VerifierRouteImport.update({
+  id: '/verifier',
+  path: '/verifier',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedMonEspaceRoute = AuthenticatedMonEspaceRouteImport.update({
@@ -130,39 +130,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/verifier': {
-      id: '/verifier'
-      path: '/verifier'
-      fullPath: '/verifier'
-      preLoaderRoute: typeof VerifierRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/officier': {
-      id: '/officier'
-      path: '/officier'
-      fullPath: '/officier'
-      preLoaderRoute: typeof OfficierRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/citoyen': {
-      id: '/citoyen'
-      path: '/citoyen'
-      fullPath: '/citoyen'
-      preLoaderRoute: typeof CitoyenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/agent': {
-      id: '/agent'
-      path: '/agent'
-      fullPath: '/agent'
-      preLoaderRoute: typeof AgentRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -172,11 +144,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/agent': {
+      id: '/agent'
+      path: '/agent'
+      fullPath: '/agent'
+      preLoaderRoute: typeof AgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/citoyen': {
+      id: '/citoyen'
+      path: '/citoyen'
+      fullPath: '/citoyen'
+      preLoaderRoute: typeof CitoyenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/officier': {
+      id: '/officier'
+      path: '/officier'
+      fullPath: '/officier'
+      preLoaderRoute: typeof OfficierRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verifier': {
+      id: '/verifier'
+      path: '/verifier'
+      fullPath: '/verifier'
+      preLoaderRoute: typeof VerifierRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/mon-espace': {
@@ -212,3 +212,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
