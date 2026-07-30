@@ -50,7 +50,7 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/mon-espace`,
+            emailRedirectTo: `${window.location.origin}/citoyen`,
             // On stocke le rôle demandé dans les métadonnées de l'utilisateur.
             // Le rôle par défaut sera 'AGENT_PENDING' si agent, sinon 'CITOYEN'.
             data: {
@@ -61,15 +61,15 @@ function AuthPage() {
         });
         if (error) throw error;
         const { data } = await supabase.auth.getSession();
-        if (data.session) {
-          navigate({ to: search.redirect || "/mon-espace", replace: true });
+        if (data.session) { // Si la session est établie, redirige
+          navigate({ to: search.redirect || "/citoyen", replace: true }); // Redirige vers /citoyen ou la page demandée
           return;
         }
         setMessage("Compte créé. Vérifiez votre boîte mail pour confirmer votre adresse.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: search.redirect || "/mon-espace", replace: true });
+        navigate({ to: search.redirect || "/citoyen", replace: true }); // Redirige vers /citoyen ou la page demandée
         return;
       }
     } catch (err) {
@@ -91,7 +91,7 @@ function AuthPage() {
       return;
     }
     if (result.redirected) return;
-    navigate({ to: search.redirect || "/mon-espace", replace: true });
+    navigate({ to: search.redirect || "/citoyen", replace: true }); // Redirige vers /citoyen ou la page demandée
   }
 
   // --- Compte passe-partout pour le test ---

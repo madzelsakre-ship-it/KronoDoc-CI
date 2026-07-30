@@ -256,7 +256,7 @@ function QueuePreview({ onRefresh }: { onRefresh: () => void }) {
                 <div className="text-xs text-muted-foreground">{it.doc}</div>
               </div>
             </div>
-            <StatusPill status={it.statut} />
+            <StatusPill status={it.statut} color={it.color} textColor={it.textColor} />
           </li>
         ))}
       </ul>
@@ -267,17 +267,17 @@ function QueuePreview({ onRefresh }: { onRefresh: () => void }) {
   );
 }
 
-function StatusPill({ status }: { status: Dossier['statut'] }) {
+function StatusPill({ status, color, textColor }: { status: Dossier['statut']; color: string; textColor: string }) {
   const map: Record<Dossier['statut'], { text: string; cls: string }> = {
-    en_attente: { text: "En attente", cls: "bg-amber-100 text-amber-800" },
-    ocr_ok: { text: "OCR OK", cls: "bg-blue-100 text-blue-800" },
-    valide: { text: "Validé", cls: "bg-green-100 text-green-800" },
-    rejete: { text: "Rejeté", cls: "bg-red-100 text-red-800" },
-    signature: { text: "→ Officier", cls: "bg-purple-100 text-purple-800" },
+    en_attente: { text: "En attente", cls: "" }, // Les couleurs viennent des props
+    ocr_ok: { text: "OCR OK", cls: "" },
+    valide: { text: "Validé", cls: "" },
+    rejete: { text: "Rejeté", cls: "" },
+    signature: { text: "→ Officier", cls: "" },
   };
   const s = map[status] || map.en_attente;
   return (
-    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${s.cls}`}>
+    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold`} style={{ backgroundColor: color, color: textColor }}>
       {s.text}
     </span>
   );
