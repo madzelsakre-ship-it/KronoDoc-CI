@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Shield, CheckCircle, XCircle, AlertTriangle, QrCode, Loader2 } from "lucide-react";
+import { Search, Shield, CheckCircle, XCircle, AlertTriangle, QrCode, Loader2, FileText } from "lucide-react";
 
 // ─── Document simulé trouvé ───
-const DOC_VALIDE = {
+const DOC_VALIDE: DocumentVerifie = {
   reference: "KDC-2026-00847",
   type: "Certificat de résidence",
   beneficiaire: "Koné Amina Bintou",
@@ -15,6 +15,18 @@ const DOC_VALIDE = {
   statut: "valide",
 };
 // En production, ces données proviendraient d'une API backend sécurisée.
+
+interface DocumentVerifie {
+  reference: string;
+  type: string;
+  beneficiaire: string;
+  mairie: string;
+  date_emission: string;
+  date_expiration: string;
+  signe_par: string;
+  hash: string;
+  statut: "valide" | "invalide";
+}
 
 // ─── QR Code simulé ───
 function QRDisplay() {
@@ -43,7 +55,7 @@ function QRDisplay() {
 }
 
 // ─── Résultat de vérification ───
-function ResultatVerification({ doc, onReset }: any) {
+function ResultatVerification({ doc, onReset }: { doc: DocumentVerifie, onReset: () => void }) {
   const estValide = doc.statut === "valide";
   // Ce composant afficherait les détails du document ou un message d'erreur.
   return (
@@ -131,7 +143,7 @@ export default function Verifier() {
   const [mode, setMode] = useState<"accueil" | "reference" | "scan" | "resultat">("accueil");
   const [reference, setReference] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resultat, setResultat] = useState<any>(null);
+  const [resultat, setResultat] = useState<DocumentVerifie | { statut: "invalide" } | null>(null);
 
   // En production, cette fonction ferait un appel API au backend pour vérifier la référence.
   const verifierParReference = () => {

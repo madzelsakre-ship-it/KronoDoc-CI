@@ -1,0 +1,22 @@
+{
+  "short_name": "KronoDoc",
+  "name": "KronoDoc CI",
+  "description": "Plateforme d'état civil digital de Côte d'Ivoire. Obtenez vos actes en moins de 3 minutes au guichet.",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0A2540",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#009A44"
+}

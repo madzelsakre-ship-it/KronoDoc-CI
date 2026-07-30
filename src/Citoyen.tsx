@@ -125,6 +125,60 @@ function QRCodeDisplay({ reference }: { reference: string }) {
   );
 }
 
+// --- Définition des champs pour les fiches de prélèvement dynamiques ---
+const FICHES_PRELEVEMENT: Record<string, { label: string, placeholder: string, type?: string }[]> = {
+  "G1": [ // Adresse et résidence
+    { label: "Adresse complète concernée", placeholder: "Lot 47, Rue J24..." },
+    { label: "Quartier / Commune", placeholder: "Cocody Angré 7e tranche" },
+    { label: "Situation d'occupation", placeholder: "Propriétaire, locataire, hébergé(e)..." },
+  ],
+  "G4": [ // Extraits, copies et duplicatas
+    { label: "Numéro de l'acte (si connu)", placeholder: "Ex: 1234/2023" },
+    { label: "Année de l'acte (si connue)", placeholder: "Ex: 2023" },
+    { label: "Noms & Prénoms du père", placeholder: "KONAN Jean-Pierre" },
+    { label: "Noms & Prénoms de la mère", placeholder: "KOUAME Ahou" },
+  ],
+  // Les autres groupes (G2, G3, G5, G6) auraient leurs propres champs ici.
+};
+
+// --- Composant de formulaire dynamique ---
+function DynamicForm({ groupe, form, setForm }: { groupe: string, form: any, setForm: (form: any) => void }) {
+  const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white";
+  const labelCls = "text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5";
+
+  const champsSpecifiques = FICHES_PRELEVEMENT[groupe] || [];
+
+  const set = (k: string) => (e: any) => setForm({ ...form, [k]: e.target.value });
+
+  return (
+    <div className="space-y-4">
+      {/* Champs communs */}
+      <div className="grid grid-cols-2 gap-4">
+        <div><label className={labelCls}>Nom de famille</label><input value={form.nom} onChange={set("nom")} placeholder="KONÉ" className={inputCls} /></div>
+        <div><label className={labelCls}>Prénom(s)</label><input value={form.prenom} onChange={set("prenom")} placeholder="Amina Bintou" className={inputCls} /></div>
+      </div>
+      <div><label className={labelCls}>Date de naissance</label><input type="date" value={form.dateNaissance} onChange={set("dateNaissance")} className={inputCls} /></div>
+      
+      {/* Champs spécifiques au groupe */}
+      {champsSpecifiques.length > 0 && (
+        <div className="border-t border-gray-100 pt-4 mt-4 space-y-4">
+          {champsSpecifiques.map(champ => (
+            <div key={champ.label}>
+              <label className={labelCls}>{champ.label}</label>
+              <input type={champ.type || "text"} placeholder={champ.placeholder} className={inputCls} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+        <div><label className={labelCls}>Téléphone</label><input value={form.telephone} onChange={set("telephone")} placeholder="07 XX XX XX XX" className={inputCls} /></div>
+        <div><label className={labelCls}>Email (optionnel)</label><input type="email" value={form.email} onChange={set("email")} placeholder="vous@exemple.com" className={inputCls} /></div>
+      </div>
+    </div>
+  );
+}
+
 // ─── PAGE PRINCIPALE ───
 export default function Citoyen() {
   const [etape, setEtape] = useState(0);
@@ -133,18 +187,14 @@ export default function Citoyen() {
   const [heberge, setHeberge] = useState(false);
   const [paiement, setPaiement] = useState("wave");
   const [recherche, setRecherche] = useState("");
-  const [form, setForm] = useState({ nom: "", prenom: "", dateNaissance: "", adresse: "", quartier: "", telephone: "", email: "" });
+  const [form, setForm] = useState({ nom: "", prenom: "", dateNaissance: "", telephone: "", email: "" });
   const [fichiers, setFichiers] = useState<any>({ cni: null, domicile: null, hebergement: null });
   const [reference] = useState(`KDC-2026-${String(Math.floor(Math.random() * 90000 + 10000))}`);
 
-  const set = (k: string) => (e: any) => setForm({ ...form, [k]: e.target.value });
-  const setFichier = (k: string) => (e: any) => {
+    const setFichier = (k: string) => (e: any) => {
     const f = e.target.files?.[0];
     if (f) setFichiers({ ...fichiers, [k]: f.name });
   };
-
-  const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white";
-  const labelCls = "text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5";
 
   const documentsFiltres = DOCUMENTS.filter(doc =>
     doc.label.toLowerCase().includes(recherche.toLowerCase())
@@ -187,21 +237,21 @@ export default function Citoyen() {
           {etape === 0 && (
             <div>
               <div className="mb-5">
-                <label className={labelCls}>Mairie concernée</label>
-                <select value={mairie} onChange={e => setMairie(e.target.value)} className={inputCls}>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Mairie concernée</label>
+                <select value={mairie} onChange={e => setMairie(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
                   <option value="">Sélectionner votre mairie...</option>
                   {MAIRIES.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               <div className="relative mb-4">
-                <label className={labelCls}>Rechercher un document</label>
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Rechercher un document</label>
                 <Search size={16} className="absolute left-4 top-10 text-gray-400" />
                 <input
                   type="text"
                   value={recherche}
                   onChange={e => setRecherche(e.target.value)}
                   placeholder="Ex: résidence, naissance..."
-                  className={`${inputCls} pl-10`}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white pl-10"
                 />
               </div>
               <div className="space-y-4">
@@ -242,43 +292,15 @@ export default function Citoyen() {
             <div>
               <h2 className="text-lg font-bold text-[#0A2540] mb-1">Vos informations</h2>
               <p className="text-xs text-gray-400 mb-5">Saisissez exactement vos informations telles qu'elles figurent sur votre CNI.</p>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className={labelCls}>Nom de famille</label>
-                  <input value={form.nom} onChange={set("nom")} placeholder="KONÉ" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Prénom(s)</label>
-                  <input value={form.prenom} onChange={set("prenom")} placeholder="Amina Bintou" className={inputCls} />
-                </div>
-              </div>
-              <div className="mb-4">
-                <label className={labelCls}>Date de naissance</label>
-                <input type="date" value={form.dateNaissance} onChange={set("dateNaissance")} className={inputCls} />
-              </div>
-              <div className="mb-4">
-                <label className={labelCls}>Adresse complète</label>
-                <input value={form.adresse} onChange={set("adresse")} placeholder="Lot 47, Rue J24..." className={inputCls} />
-              </div>
-              <div className="mb-4">
-                <label className={labelCls}>Quartier / Commune</label>
-                <input value={form.quartier} onChange={set("quartier")} placeholder="Cocody Angré 7e tranche" className={inputCls} />
-              </div>
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className={labelCls}>Téléphone</label>
-                  <input value={form.telephone} onChange={set("telephone")} placeholder="07 XX XX XX XX" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Email (optionnel)</label>
-                  <input type="email" value={form.email} onChange={set("email")} placeholder="vous@exemple.com" className={inputCls} />
-                </div>
-              </div>
-              <div className="flex gap-3">
+              
+              {/* Le formulaire dynamique est rendu ici */}
+              <DynamicForm groupe={docChoisi?.groupe || ""} form={form} setForm={setForm} />
+
+              <div className="flex gap-3 mt-6">
                 <button onClick={() => setEtape(0)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
                   <ArrowLeft size={14} /> Retour
                 </button>
-                <button onClick={() => setEtape(2)} disabled={!form.nom || !form.prenom || !form.adresse}
+                <button onClick={() => setEtape(2)} disabled={!form.nom || !form.prenom}
                   className="flex-1 py-3 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
                   Continuer →
                 </button>
@@ -349,17 +371,17 @@ export default function Citoyen() {
               <div className="bg-[#F0F2F5] rounded-xl p-4 mb-5">
                 <div className="text-xs text-gray-500 mb-3 font-semibold uppercase tracking-wide">Récapitulatif de votre demande</div>
                 <div className="space-y-1.5">
-                  {[
+                  {[ // Utilisation de `filter(Boolean)` pour ne pas afficher les lignes avec des valeurs vides
                     ["Document", docChoisi?.label],
                     ["Mairie", mairie],
                     ["Demandeur", `${form.nom} ${form.prenom}`],
-                    ["Adresse", form.adresse || "—"],
-                  ].map(([k, v]) => (
+                    ["Téléphone", form.telephone || "—"],
+                  ].map(([k, v]) => (v ? (
                     <div key={k} className="flex justify-between text-sm">
                       <span className="text-gray-400">{k}</span>
                       <span className="font-medium text-[#0A2540] text-right max-w-[200px]">{v}</span>
                     </div>
-                  ))}
+                  ) : null))}
                 </div>
                 <div className="border-t border-gray-200 mt-3 pt-3 flex justify-between items-center">
                   <span className="text-sm text-gray-500">Taxe communale</span>
@@ -389,8 +411,8 @@ export default function Citoyen() {
               {/* Numéro de téléphone pour mobile money */}
               {paiement !== "carte" && (
                 <div className="mb-5">
-                  <label className={labelCls}>Numéro {paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : "MTN MoMo"}</label>
-                  <input defaultValue={form.telephone} className={inputCls} placeholder="07 XX XX XX XX" />
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Numéro {paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : "MTN MoMo"}</label>
+                  <input defaultValue={form.telephone} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" placeholder="07 XX XX XX XX" />
                   <p className="text-xs text-gray-400 mt-1.5">Vous recevrez une demande de paiement sur ce numéro</p>
                 </div>
               )}
@@ -422,6 +444,17 @@ export default function Citoyen() {
               <div className="font-mono text-sm text-gray-500 mb-1">{reference}</div>
               <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
                 ⏳ En attente validation au guichet
+              </div>
+
+              {/* Message important sur la vérification physique */}
+              <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 text-left mb-5">
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="text-sm font-semibold text-amber-800">Important : N'oubliez pas vos originaux !</div>
+                    <div className="text-xs text-amber-700 mt-1">Pour finaliser votre demande, l'agent au guichet devra comparer les documents originaux (CNI, justificatif de domicile, etc.) avec les copies que vous avez envoyées.</div>
+                  </div>
+                </div>
               </div>
 
               {/* Récapitulatif final */}

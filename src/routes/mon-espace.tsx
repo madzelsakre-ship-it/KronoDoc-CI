@@ -28,8 +28,19 @@ export const Route = createFileRoute("/mon-espace")({
   component: MonEspacePage,
 });
 
+// Interface pour typer les données d'un dossier dans l'espace citoyen
+interface DossierCitoyen {
+  id: string;
+  doc: string;
+  date: string;
+  statut: "En attente de signature" | "Archivé" | "Rejeté";
+  icon: React.ElementType;
+  color: string;
+  actions: ("download" | "renew")[];
+}
+
 // En production, cette liste serait chargée depuis une API backend pour l'utilisateur connecté
-const DOSSIERS_CITOYEN = [
+const DOSSIERS_CITOYEN: DossierCitoyen[] = [
   {
     id: "KDC-2026-08122",
     doc: "Certificat de résidence",
@@ -37,7 +48,7 @@ const DOSSIERS_CITOYEN = [
     statut: "En attente de signature",
     icon: Clock,
     color: "text-amber-500",
-    actions: [],
+    actions: [] as ("download" | "renew")[],
   },
   {
     id: "KDC-2025-98471",
@@ -46,7 +57,7 @@ const DOSSIERS_CITOYEN = [
     statut: "Archivé",
     icon: Archive,
     color: "text-muted-foreground",
-    actions: ["download", "renew"],
+    actions: ["download", "renew"] as ("download" | "renew")[],
   },
   {
     id: "KDC-2024-51109",
@@ -55,7 +66,7 @@ const DOSSIERS_CITOYEN = [
     statut: "Archivé",
     icon: Archive,
     color: "text-muted-foreground",
-    actions: ["download"],
+    actions: ["download"] as ("download" | "renew")[],
   },
 ];
 

@@ -63,7 +63,11 @@ function VerifierPage() {
     const cleaned = ref.trim().toUpperCase();
     if (!cleaned) return;
     // Démo : KD-2026-* → authentique, sinon falsifié
-    setResult(cleaned.startsWith("KD-2026-") ? "valid" : "invalid");
+    if (cleaned.startsWith("KDC-2026-")) {
+      useExample(); // Utilise la fonction d'exemple pour charger les données
+    } else {
+      setResult("invalid");
+    }
   }
 
   function useExample() {
@@ -200,7 +204,7 @@ function VerifierPage() {
                 </form>
 
                 {/* Résultat de la vérification */}
-                {result && <ResultCard variant={result} refValue={ref} />}
+                {result && <ResultCard variant={result} refValue={ref} documentData={documentData} />}
               </div>
             </div>
           </div>
