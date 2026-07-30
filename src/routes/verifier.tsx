@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { FileText } from "lucide-react";
 import { useState } from "react";
 import { // Importation des icônes nécessaires
   ArrowLeft,
@@ -365,9 +366,17 @@ function ResultCard({ variant, refValue, documentData }: { variant: "valid" | "i
           <Row label="Mairie émettrice" value={doc.mairie} />
           <Row label="Signé par" value={doc.signe_par} />
           <Row label="Référence" value={doc.reference} />
-          <div className="mt-3 flex items-center gap-2 rounded-md bg-card px-3 py-2 text-xs text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5 text-success" />
-            Sceau cryptographique vérifié · SHA-256
+          {/* 
+            Cette section met en avant les éléments de sécurité numérique,
+            conformément à votre analyse sur le "timbre numérique".
+          */}
+          <div className="mt-3 flex flex-col gap-2 rounded-md bg-card p-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-success" />Sceau Électronique Visuel (SEV) vérifié.</div>
+            <div className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-success" />Filigrane numérique et micro-impressions conformes.</div>
+          </div>
+          <div className="mt-2 rounded-md bg-card p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Empreinte numérique (SHA-256)</div>
+            <div className="mt-1 font-mono text-[10px] text-foreground/80 break-all">{doc.hash}</div>
           </div>
         </div>
       </div>

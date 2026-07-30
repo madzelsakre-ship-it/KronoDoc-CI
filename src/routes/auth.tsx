@@ -28,6 +28,7 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [role, setRole] = useState<"citoyen" | "agent">("citoyen");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -48,9 +49,14 @@ function AuthPage() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { // Options pour la redirection et les métadonnées
+          options: {
             emailRedirectTo: `${window.location.origin}/mon-espace`,
-            data: { first_name: firstName, last_name: lastName, phone },
+            // On stocke le rôle demandé dans les métadonnées de l'utilisateur.
+            // Le rôle par défaut sera 'AGENT_PENDING' si agent, sinon 'CITOYEN'.
+            data: {
+              first_name: firstName, last_name: lastName, phone,
+              role: role === 'agent' ? 'AGENT_PENDING' : 'CITOYEN'
+            },
           },
         });
         if (error) throw error;
@@ -86,6 +92,26 @@ function AuthPage() {
     }
     if (result.redirected) return;
     navigate({ to: search.redirect || "/mon-espace", replace: true });
+  }
+
+  // --- Compte passe-partout pour le test ---
+  async function handleTestLogin() {
+    setError(null);
+    setMessage(null);
+    setLoading(true);
+    try {
+      // En production, ces identifiants seraient dans des variables d'environnement
+      const { error } = await supabase.auth.signInWithPassword({
+        email: "test@kronodoc.ci",
+        password: "password",
+      });
+      if (error) throw new Error("Le compte de test n'a pas pu se connecter. Vérifiez sa configuration dans Supabase.");
+      navigate({ to: search.redirect || "/citoyen", replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur est survenue.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -134,6 +160,29 @@ function AuthPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3">
+              {mode === "signup" && (
+                <div className="border-b border-border pb-4">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Vous êtes...</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setRole('citoyen')}
+                      className={`flex items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold border-2 transition-colors ${role === 'citoyen' ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}>
+                      <User className="h-4 w-4" />
+                      Un citoyen
+                    </button>
+                    <button type="button" onClick={() => setRole('agent')}
+                      className={`flex items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold border-2 transition-colors ${role === 'agent' ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}>
+                      <Briefcase className="h-4 w-4" />
+                      Un agent de l'État
+                    </button>
+                  </div>
+                  {role === 'agent' && (
+                    <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+                      Un justificatif professionnel (carte, arrêté de nomination) vous sera demandé après inscription pour valider votre compte agent.
+                    </div>
+                  )}
+                </div>
+              )}
+
               {mode === "signup" && (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -208,6 +257,15 @@ function AuthPage() {
                 {mode === "signin" ? "Créer un compte" : "Se connecter"}
               </button>
             </p>
+          </div>
+          
+          {/* --- Bouton de test "passe-partout" --- */}
+          <div className="mt-4 text-center">
+            <button
+              onClick={handleTestLogin}
+              className="text-xs text-muted-foreground hover:text-primary transition-colors">
+              Connexion de test (passe-partout)
+            </button>
           </div>
 
           <p className="mt-4 text-center text-xs text-muted-foreground">

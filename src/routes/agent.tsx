@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ScanLine,
@@ -16,6 +16,8 @@ import {
   Bell,
 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
+import { supabase } from "@/integrations/supabase/client";
+import { getQueue, Dossier } from "@/lib/mock-data";
 import { SiteFooter } from "@/components/site-footer";
 
 export const Route = createFileRoute("/agent")({
@@ -35,10 +37,27 @@ export const Route = createFileRoute("/agent")({
       },
     ],
   }),
+  // --- Sécurisation de la route ---
+  // Ce bloc s'exécute avant que la page ne soit rendue.
+  beforeLoad: async ({ location }) => {
+    const { data } = await supabase.auth.getSession();
+    // Si l'utilisateur n'est pas connecté, on le redirige vers la page de connexion.
+    if (!data.session) {
+      throw redirect({
+        to: "/auth",
+        search: {
+          // Après connexion, il sera redirigé vers la page qu'il tentait d'accéder.
+          redirect: location.href,
+        },
+      });
+    }
+    // NOTE: En production, on vérifierait ici si l'utilisateur a bien le rôle "agent".
+  },
   component: AgentPage,
 });
 
 function AgentPage() {
+  const router = useRouter();
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -78,7 +97,10 @@ function AgentPage() {
             </div>
 
             {/* Aperçu file d'attente */}
-            <QueuePreview />
+            <QueuePreview onRefresh={() => {
+              // Force le re-rendu de la page pour afficher les nouvelles données
+              router.invalidate();
+            }} />
           </div>
         </div>
       </section>
@@ -204,13 +226,10 @@ function StepCard({
   );
 }
 
-function QueuePreview() {
-  const items = [
-    { name: "K. Adjoua", doc: "Certificat de résidence", status: "en-cours" },
-    { name: "O. Bakary", doc: "Extrait de naissance", status: "attente" },
-    { name: "T. Aya", doc: "Certificat de résidence", status: "attente" },
-    { name: "N. Kouamé", doc: "Certificat de vie", status: "signature" },
-  ];
+function QueuePreview({ onRefresh }: { onRefresh: () => void }) {
+  // --- Lecture des données depuis la source partagée ---
+  const items = getQueue();
+
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elevated)]">
       <div className="flex items-center justify-between border-b border-border bg-muted/50 px-5 py-3">
@@ -221,21 +240,23 @@ function QueuePreview() {
           </span>
           File d'attente — Guichet 3
         </div>
-        <div className="text-xs text-muted-foreground">Cocody · Aujourd'hui</div>
+        <button onClick={onRefresh} className="text-xs text-muted-foreground hover:text-foreground">
+          Actualiser
+        </button>
       </div>
       <ul className="divide-y divide-border">
         {items.map((it, i) => (
           <li key={i} className="flex items-center justify-between px-5 py-3">
             <div className="flex items-center gap-3">
               <div className="grid h-8 w-8 place-items-center rounded-full bg-muted text-xs font-semibold text-foreground">
-                {it.name.split(" ")[0][0]}
+                {it.avatar}
               </div>
               <div>
-                <div className="text-sm font-semibold text-foreground">{it.name}</div>
+                <div className="text-sm font-semibold text-foreground">{it.nom}</div>
                 <div className="text-xs text-muted-foreground">{it.doc}</div>
               </div>
             </div>
-            <StatusPill status={it.status as "en-cours" | "attente" | "signature"} />
+            <StatusPill status={it.statut} />
           </li>
         ))}
       </ul>
@@ -246,13 +267,15 @@ function QueuePreview() {
   );
 }
 
-function StatusPill({ status }: { status: "en-cours" | "attente" | "signature" }) {
-  const map = {
-    "en-cours": { text: "En cours", cls: "bg-primary/10 text-primary" },
-    attente: { text: "En attente", cls: "bg-muted text-muted-foreground" },
-    signature: { text: "→ Officier", cls: "bg-success/10 text-success" },
+function StatusPill({ status }: { status: Dossier['statut'] }) {
+  const map: Record<Dossier['statut'], { text: string; cls: string }> = {
+    en_attente: { text: "En attente", cls: "bg-amber-100 text-amber-800" },
+    ocr_ok: { text: "OCR OK", cls: "bg-blue-100 text-blue-800" },
+    valide: { text: "Validé", cls: "bg-green-100 text-green-800" },
+    rejete: { text: "Rejeté", cls: "bg-red-100 text-red-800" },
+    signature: { text: "→ Officier", cls: "bg-purple-100 text-purple-800" },
   };
-  const s = map[status];
+  const s = map[status] || map.en_attente;
   return (
     <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${s.cls}`}>
       {s.text}

@@ -2,18 +2,18 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   ArrowLeft,
-  ArrowRight,
-  Check,
   Upload,
-  CreditCard,
   QrCode,
-  FileText,
   CheckCircle,
   AlertCircle,
   ChevronRight,
+  Download,
+  Building,
   Phone,
+  Copy,
   Search,
 } from "lucide-react";
+import { addDossierToQueue } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/citoyen")({
   head: () => ({
@@ -46,41 +46,36 @@ interface GroupType {
 }
 
 // --- NOUVELLE STRUCTURE : Groupes de documents ---
+// Mise à jour pour refléter la logique "Circuit Long" vs "Circuit Court"
 const GROUPES: GroupType[] = [
-  { code: "G1", titre: "Certificats d’adresse et de résidence", description: "Attestation de votre lieu de vie actuel." },
-  { code: "G2", titre: "Certificats de situation personnelle et familiale", description: "Documents relatifs à votre statut civil." },
-  { code: "G3", titre: "Certificats de vie, social et fiscal", description: "Justificatifs pour les organismes sociaux et administratifs." },
-  { code: "G4", titre: "Extraits, copies et duplicatas d’état civil", description: "Reproduction d'actes existants dans les registres." },
-  { code: "G5", titre: "Légalisation et conformité", description: "Authentification de signatures ou de copies de documents." },
-  { code: "G6", titre: "Déclarations et autorisations sensibles", description: "Démarches à caractère officiel et réglementé." },
+  { code: "A", titre: "Groupe A : Documents à Instruction & Validation", description: "Actes nécessitant une étude de dossier par un agent (déclarations, certificats...)." },
+  { code: "B", titre: "Groupe B : Rééditions & Copies Certifiées", description: "Copies d'actes déjà existants dans les registres (extraits, légalisations...)." },
+  { code: "C", titre: "Groupe C : Actes sensibles à Retrait Obligatoire", description: "Documents nécessitant une validation et un retrait physique exclusif en mairie." },
 ];
 
 // --- NOUVELLE STRUCTURE : Référentiel des documents par groupe ---
 // En production, ces données seraient chargées depuis une API (table `document_templates` versionnée par mairie)
 const DOCUMENTS = [
-  // --- G1: Certificats d’adresse et de résidence ---
-  { id: "residence", label: "Certificat de résidence", groupe: "G1", prix: 500, delai: "< 3 min" },
-  { id: "domicile", label: "Attestation de domicile", groupe: "G1", prix: 500, delai: "< 3 min", disabled: true },
-  { id: "hebergement", label: "Attestation d'hébergement", groupe: "G1", prix: 500, delai: "< 3 min", disabled: true },
-  // --- G2: Certificats de situation personnelle et familiale ---
-  { id: "celibat", label: "Certificat de célibat", groupe: "G2", prix: 1000, delai: "< 5 min", disabled: true },
-  { id: "non-remariage", label: "Certificat de non-remariage", groupe: "G2", prix: 1000, delai: "< 5 min", disabled: true },
-  // --- G3: Certificats de vie, social et fiscal ---
-  { id: "vie", label: "Certificat de vie", groupe: "G3", prix: 500, delai: "< 3 min" },
-  { id: "indigence", label: "Certificat d'indigence", groupe: "G3", prix: 0, delai: "< 5 min", disabled: true },
-  // --- G4: Extraits, copies et duplicatas d’état civil ---
-  { id: "naissance", label: "Extrait d'acte de naissance", groupe: "G4", prix: 1000, delai: "< 5 min" },
-  { id: "mariage", label: "Extrait d'acte de mariage", groupe: "G4", prix: 2000, delai: "< 5 min", disabled: true },
-  { id: "deces", label: "Extrait d'acte de décès", groupe: "G4", prix: 1000, delai: "< 5 min", disabled: true },
-  // --- G5: Légalisation et conformité ---
-  { id: "legalisation", label: "Légalisation de signature", groupe: "G5", prix: 500, delai: "< 3 min" },
-  { id: "copie", label: "Certification de copie conforme", groupe: "G5", prix: 500, delai: "< 3 min", disabled: true },
-  // --- G6: Déclarations et autorisations sensibles ---
-  { id: "declaration-deces", label: "Déclaration de décès", groupe: "G6", prix: 0, delai: "Variable", disabled: true },
-  { id: "permis-inhumer", label: "Permis d'inhumer", groupe: "G6", prix: 5000, delai: "Variable", disabled: true },
-];
+  // --- Groupe A : Instruction & Validation (Circuit Long) ---
+  { id: "residence", label: "Certificat de résidence", groupe: "A", prix: 500, delai: "< 3 min" },
+  { id: "domicile", label: "Attestation de domicile", groupe: "A", prix: 500, delai: "< 3 min" },
+  { id: "hebergement", label: "Attestation d'hébergement", groupe: "A", prix: 500, delai: "< 3 min" },
+  { id: "celibat", label: "Certificat de célibat", groupe: "A", prix: 1000, delai: "< 5 min" },
+  { id: "non-remariage", label: "Certificat de non-remariage", groupe: "A", prix: 1000, delai: "< 5 min" },
+  { id: "vie", label: "Certificat de vie", groupe: "A", prix: 500, delai: "< 3 min" },
+  { id: "indigence", label: "Certificat d'indigence", groupe: "A", prix: 0, delai: "< 5 min" },
 
-const ETAPES = ["Document", "Informations", "Pièces", "Paiement", "QR Code"];
+  // --- Groupe B : Rééditions & Instantanés (Circuit Court) ---
+  { id: "naissance", label: "Extrait d'acte de naissance", groupe: "B", prix: 1000, delai: "< 5 min" },
+  { id: "mariage", label: "Extrait d'acte de mariage", groupe: "B", prix: 2000, delai: "< 5 min" },
+  { id: "deces", label: "Extrait d'acte de décès", groupe: "B", prix: 1000, delai: "< 5 min" },
+  { id: "legalisation", label: "Légalisation de signature", groupe: "B", prix: 500, delai: "< 3 min" },
+  { id: "copie", label: "Certification de copie conforme", groupe: "B", prix: 500, delai: "< 3 min" },
+
+  // --- Groupe C : Actes sensibles (Circuit Long, Retrait Obligatoire) ---
+  { id: "declaration-deces", label: "Déclaration de décès", groupe: "C", prix: 0, delai: "Variable" },
+  { id: "permis-inhumer", label: "Permis d'inhumer", groupe: "C", prix: 5000, delai: "Variable" },
+];
 
 const MAIRIES = [
   "Mairie de Cocody", "Mairie de Yopougon", "Mairie de Abobo",
@@ -89,10 +84,10 @@ const MAIRIES = [
 ];
 
 // ─── Composant Progress ───
-function Progress({ etape }: { etape: number }) {
+function Progress({ etape, etapes }: { etape: number; etapes: string[] }) {
   return (
     <div className="flex items-center justify-center gap-0 mb-8">
-      {ETAPES.map((label, i) => (
+      {etapes.map((label, i) => (
         <div key={i} className="flex items-center">
           <div className="flex flex-col items-center">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all
@@ -103,7 +98,7 @@ function Progress({ etape }: { etape: number }) {
               {label}
             </span>
           </div>
-          {i < ETAPES.length - 1 && (
+          {i < etapes.length - 1 && (
             <div className={`w-10 h-0.5 mb-4 mx-1 ${i < etape ? "bg-green-500" : "bg-gray-200"}`} />
           )}
         </div>
@@ -154,13 +149,13 @@ function QRCodeDisplay({ reference }: { reference: string }) {
 
 // --- Définition des champs pour les fiches de prélèvement dynamiques ---
 const FICHES_PRELEVEMENT: Record<string, { key: string, label: string, placeholder: string, type?: string }[]> = {
-  "G1": [ // Adresse et résidence
+  "A": [ // Champs communs pour les documents à instruction
     { key: "adresse", label: "Adresse complète concernée", placeholder: "Lot 47, Rue J24..." },
     { key: "quartier", label: "Quartier / Commune", placeholder: "Cocody Angré 7e tranche" },
     { key: "occupation", label: "Situation d'occupation", placeholder: "Propriétaire, locataire, hébergé(e)..." },
   ],
-  "G4": [ // Extraits, copies et duplicatas
-    { key: "acteNumero", label: "Numéro de l'acte (si connu)", placeholder: "Ex: 1234/2023" },
+  "B": [ // Champs communs pour les rééditions
+    { key: "acteNumero", label: "Numéro de l'acte original", placeholder: "Ex: 1234/2023" },
     { key: "acteAnnee", label: "Année de l'acte (si connue)", placeholder: "Ex: 2023" },
     { key: "nomPere", label: "Noms & Prénoms du père", placeholder: "KONAN Jean-Pierre" },
     { key: "nomMere", label: "Noms & Prénoms de la mère", placeholder: "KOUAME Ahou" },
@@ -168,14 +163,31 @@ const FICHES_PRELEVEMENT: Record<string, { key: string, label: string, placehold
   // Les autres groupes (G2, G3, G5, G6) auraient leurs propres champs ici.
 };
 
+// --- Interfaces pour un typage plus strict des états ---
+interface FormData {
+  nom: string;
+  prenom: string;
+  dateNaissance: string;
+  telephone: string;
+  email: string;
+  [key: string]: string; // Pour les champs dynamiques
+}
+
+interface FichiersData {
+  cni: string | null;
+  domicile: string | null;
+  hebergement: string | null;
+}
+
+
 // --- Composant de formulaire dynamique ---
-function DynamicForm({ groupe, form, setForm }: { groupe: string, form: any, setForm: (form: any) => void }) {
+function DynamicForm({ groupe, form, setForm }: { groupe: string, form: FormData, setForm: (form: FormData) => void }) {
   const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white";
   const labelCls = "text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5";
 
   const champsSpecifiques = FICHES_PRELEVEMENT[groupe] || [];
 
-  const set = (k: string) => (e: any) => setForm({ ...form, [k]: e.target.value });
+  const set = (k: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
 
   return (
     <div className="space-y-4">
@@ -211,14 +223,24 @@ function Citoyen() {
   const [etape, setEtape] = useState(0);
   const [docChoisi, setDocChoisi] = useState<DocType | null>(null); // Typage plus précis
   const [mairie, setMairie] = useState("");
+  const [nombreCopies, setNombreCopies] = useState(1);
   const [heberge, setHeberge] = useState(false);
   const [paiement, setPaiement] = useState("wave");
   const [recherche, setRecherche] = useState("");
-  const [form, setForm] = useState<any>({ nom: "", prenom: "", dateNaissance: "", telephone: "", email: "" });
-  const [fichiers, setFichiers] = useState<any>({ cni: null, domicile: null, hebergement: null });
+  const [form, setForm] = useState<FormData>({ nom: "", prenom: "", dateNaissance: "", telephone: "", email: "" });
+  const [fichiers, setFichiers] = useState<FichiersData>({ cni: null, domicile: null, hebergement: null });
   const [reference] = useState(`KDC-2026-${String(Math.floor(Math.random() * 90000 + 10000))}`);
 
-    const setFichier = (k: string) => (e: any) => {
+  // La barre de progression s'adapte au parcours utilisateur
+  const ETAPES = (docChoisi?.groupe === 'A' || docChoisi?.groupe === 'C')
+    ? ["Document", "Informations", "Pièces", "QR Code"]
+    : ["Document", "Informations", "Pièces", "Paiement", "Récupération"];
+
+  // Ajuste l'index de l'étape si le paiement est sauté
+  const etapePaiementIndex = ETAPES.indexOf("Paiement");
+  const etapeQrCodeIndex = ETAPES.indexOf("QR Code");
+
+  const setFichier = (k: keyof FichiersData) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (f) setFichiers({ ...fichiers, [k]: f.name });
   };
@@ -256,7 +278,7 @@ function Citoyen() {
           </div>
         )}
 
-        <Progress etape={etape} />
+        <Progress etape={etape} etapes={ETAPES} />
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
 
@@ -306,6 +328,21 @@ function Citoyen() {
                   );
                 })}
               </div>
+              {docChoisi && (
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Nombre d'exemplaires</label>
+                  <div className="flex items-center gap-2">
+                    <Copy size={16} className="text-gray-400" />
+                    <input
+                      type="number"
+                      value={nombreCopies}
+                      onChange={e => setNombreCopies(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      min="1"
+                      className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                    />
+                  </div>
+                </div>
+              )}
               <button onClick={() => setEtape(1)} disabled={!docChoisi || !mairie}
                 className="mt-6 w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
                 Continuer →
@@ -379,7 +416,16 @@ function Citoyen() {
                 <button onClick={() => setEtape(1)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
                   <ArrowLeft size={14} /> Retour
                 </button>
-                <button onClick={() => setEtape(3)} disabled={!fichiers.cni || !fichiers.domicile}
+                <button onClick={() => {
+                  // --- Logique de branchement : Paiement ou QR direct ---
+                  // Pour les circuits longs (A et C), on saute le paiement en ligne.
+                  if (docChoisi?.groupe === 'A' || docChoisi?.groupe === 'C') {
+                    addDossierToQueue({ id: reference, nom: `${form.nom} ${form.prenom}`, doc: docChoisi.label });
+                    setEtape(etapeQrCodeIndex); // Va directement à l'étape QR Code
+                  } else {
+                    setEtape(etapePaiementIndex); // Va à l'étape de paiement pour le circuit court
+                  }
+                }} disabled={!fichiers.cni || !fichiers.domicile}
                   className="flex-1 py-3 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
                   Continuer →
                 </button>
@@ -388,7 +434,7 @@ function Citoyen() {
           )}
 
           {/* ── ÉTAPE 3 : Paiement ── */}
-          {etape === 3 && (
+          {etape === etapePaiementIndex && docChoisi?.groupe === 'B' && ( // Ne s'affiche que pour le Groupe B
             <div>
               <h2 className="text-lg font-bold text-[#0A2540] mb-1">Paiement des droits</h2>
               <p className="text-xs text-gray-400 mb-5">Le paiement sécurise votre dossier et génère votre QR code de passage au guichet.</p>
@@ -401,6 +447,7 @@ function Citoyen() {
                     ["Document", docChoisi?.label],
                     ["Mairie", mairie],
                     ["Demandeur", `${form.nom} ${form.prenom}`],
+                    ["Exemplaires", `${nombreCopies} (avec QR codes uniques)`],
                     ["Téléphone", form.telephone || "—"],
                   ].map(([k, v]) => (
                     <div key={k} className="flex justify-between text-sm">
@@ -410,8 +457,17 @@ function Citoyen() {
                   ))}
                 </div>
                 <div className="border-t border-gray-200 mt-3 pt-3 flex justify-between items-center">
-                  <span className="text-sm text-gray-500">Taxe communale</span>
-                  <span className="text-xl font-extrabold text-[#009A44]">{docChoisi?.prix} FCFA</span>
+                  <div className="text-sm">
+                    <div className="text-gray-500">Coût du document</div>
+                    <div className="text-gray-400 text-xs mt-1">+ Timbre numérique (légalisation)</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-semibold text-[#0A2540]">{docChoisi ? docChoisi.prix * nombreCopies : 0} FCFA</div>
+                    <div className="font-semibold text-[#0A2540] text-xs mt-1">+ 500 FCFA</div>
+                    <div className="border-t border-gray-300 mt-1 pt-1 text-xl font-extrabold text-[#009A44]">
+                      {docChoisi ? (docChoisi.prix * nombreCopies) + 500 : 0} FCFA
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -447,22 +503,34 @@ function Citoyen() {
                 <button onClick={() => setEtape(2)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
                   <ArrowLeft size={14} /> Retour
                 </button>
-                <button onClick={() => setEtape(4)}
-                  className="flex-1 py-3 bg-[#F77F00] text-white font-bold rounded-xl hover:bg-orange-600 transition-colors text-sm">
-                  Payer {docChoisi?.prix} FCFA via {paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : paiement === "mtn" ? "MTN" : "Carte"} →
+                <button onClick={() => {
+                  // --- Envoi des informations à la mairie (simulation) ---
+                  if (docChoisi) {
+                    addDossierToQueue({ id: reference, nom: `${form.nom} ${form.prenom}`, doc: docChoisi.label });
+                  }
+                  setEtape(etapePaiementIndex + 1);
+                }}
+                  className="flex-1 py-3 bg-[#F77F00] text-white font-bold rounded-xl hover:bg-orange-600 transition-colors text-sm"
+                >
+                  Payer {docChoisi ? (docChoisi.prix * nombreCopies) + 500 : 0} FCFA via {paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : "MTN"} →
                 </button>
               </div>
             </div>
           )}
 
           {/* ── ÉTAPE 4 : QR Code ── */}
-          {etape === 4 && (
-            <div className="text-center" data-statut="EN_ATTENTE_GUICHET"> {/* Statut pour le backend */}
+          {etape >= etapeQrCodeIndex && (
+            // --- Logique de branchement : Circuit Long (A) vs Circuit Court (B) ---
+            (docChoisi?.groupe === 'A' || docChoisi?.groupe === 'C' ? (
+              <div className="text-center" data-statut="EN_ATTENTE_GUICHET"> {/* Statut pour le backend */}
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle size={32} className="text-green-600" />
               </div>
-              <h2 className="text-xl font-extrabold text-[#0A2540] mb-1">Dossier enregistré !</h2>
-              <p className="text-sm text-gray-400 mb-6">Paiement confirmé · Présentez ce QR code au guichet</p>
+              <h2 className="text-xl font-extrabold text-[#0A2540] mb-1">Pré-demande enregistrée !</h2>
+              <p className="text-sm text-gray-400 mb-6">
+                {docChoisi?.groupe === 'B' ? 'Paiement confirmé' : 'Paiement à effectuer au guichet'}
+                · Présentez ce QR code en mairie.
+              </p>
 
               <div className="flex justify-center mb-4">
                 <QRCodeDisplay reference={reference} />
@@ -491,7 +559,10 @@ function Citoyen() {
                     ["Document", docChoisi?.label],
                     ["Mairie", mairie],
                     ["Demandeur", `${form.nom} ${form.prenom}`],
-                    ["Paiement", `${paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : "MTN"} · ${docChoisi?.prix} FCFA ✅`],
+                    ["Paiement", docChoisi?.groupe === 'B'
+                      ? `${paiement === "wave" ? "Wave" : "Mobile Money"} · ${(docChoisi.prix * nombreCopies) + 500} FCFA ✅`
+                      : `À régler au guichet (${docChoisi?.prix * nombreCopies} FCFA)`
+                    ],
                     ["Délai estimé", docChoisi?.delai + " au guichet"],
                   ].map(([k, v]) => (
                     <div key={k} className="flex justify-between text-sm">
@@ -523,6 +594,71 @@ function Citoyen() {
                   📧 Recevoir par email
                 </button>
               </div>
+
+              {/* --- Simulation de la notification post-validation --- */}
+              <div className="mt-6 border-t border-dashed pt-6 text-center">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Après validation par l'agent...
+                </div>
+                <div className="mt-3 rounded-lg border border-success/30 bg-success/5 p-4">
+                  {docChoisi?.groupe === 'C' ? (
+                    <>
+                      <div className="font-semibold text-success">🎉 Notification : Document prêt pour retrait</div>
+                      <div className="mt-1 text-xs text-success/80">Veuillez vous présenter au guichet de la mairie pour récupérer votre document officiel.</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="font-semibold text-success">🎉 Notification : Votre document est prêt !</div>
+                      <div className="mt-1 text-xs text-success/80">Vous pouvez le télécharger en format PDF sécurisé ou le récupérer au guichet.</div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+            ) : (
+              // --- NOUVELLE INTERFACE POUR LE CIRCUIT COURT (GROUPE B) ---
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle size={32} className="text-green-600" />
+                </div>
+                <h2 className="text-xl font-extrabold text-[#0A2540] mb-1">Demande validée !</h2>
+                <p className="text-sm text-gray-400 mb-6">Paiement confirmé. Comment souhaitez-vous recevoir votre document ?</p>
+
+                <div className="space-y-3">
+                  <button className="w-full text-left border-2 border-primary bg-primary/5 rounded-xl p-4 transition-all flex items-start gap-4">
+                    <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-foreground flex-shrink-0">
+                      <Download size={20} />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-sm text-primary">Voie Numérique (Recommandé)</div>
+                      <div className="text-xs text-primary/80 mt-0.5">Téléchargez immédiatement le PDF légalisé, prêt à l'emploi.</div>
+                    </div>
+                  </button>
+                  <button onClick={() => {
+                    alert("Votre demande de retrait en mairie a été enregistrée. Vous serez notifié quand le document sera prêt.");
+                    // En production, on mettrait à jour le statut du dossier en "ATTENTE_RETRAIT_GUICHET"
+                    // et on redirigerait vers l'espace citoyen.
+                    setEtape(0);
+                    setDocChoisi(null);
+                  }}
+                    className="w-full text-left border-2 border-gray-100 hover:border-gray-200 rounded-xl p-4 transition-all flex items-start gap-4">
+                    <div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground flex-shrink-0">
+                      <Building size={20} />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-sm text-foreground">Voie Classique</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">Retirez le document papier déjà légalisé à la mairie (paiement au guichet).</div>
+                    </div>
+                  </button>
+                </div>
+
+                <div className="mt-6">
+                  <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-primary">
+                    Retourner à l'accueil
+                  </Link>
+                </div>
+              </div>
+            ))
 
               <p className="text-xs text-gray-400 mt-5">
                 Vous serez notifié par SMS au <strong>{form.telephone || "07 XX XX XX XX"}</strong> quand votre document sera prêt.
