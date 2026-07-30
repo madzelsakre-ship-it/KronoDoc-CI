@@ -369,8 +369,8 @@ function DossierMockup() {
               <Field label="Nom" value="KOUASSI" />
               <Field label="Prénom(s)" value="Adjoua Marie" />
               <Field label="Née le" value="12 mars 1991 · Bouaké" />
-              <Field label="Adresse" value="Cocody, Riviera Golf, Îlot 12, Lot 47" />
-              <Field label="CNI" value="C 0092 4471 8" />
+              <Field label="Adresse déclarée" value="Riviera Golf, Îlot 12, Lot 47" />
+              <Field label="N° CNI" value="C009244781" />
             </div>
 
             {/* OCR + comparaison */}
@@ -378,7 +378,7 @@ function DossierMockup() {
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-success">
                   <ScanLine className="h-3.5 w-3.5" />
-                  OCR des originaux
+                  Vérification des originaux (OCR)
                 </div>
                 <span className="rounded-full bg-success px-2 py-0.5 text-[10px] font-bold text-success-foreground">
                   100 % concordance
@@ -386,20 +386,20 @@ function DossierMockup() {
               </div>
               <CheckItem
                 icon={<CreditCard className="h-3.5 w-3.5" />}
-                label="CNI"
-                detail="Nom + date de naissance identiques"
+                label="Pièce d'identité (Scan)"
+                detail="Nom, prénom et date de naissance correspondent."
                 ok
               />
               <CheckItem
                 icon={<Home className="h-3.5 w-3.5" />}
-                label="Facture CIE (n° 8842-7712)"
-                detail="Adresse identique · Compteur au nom du demandeur"
+                label="Justificatif de domicile (Scan)"
+                detail="Facture CIE. Adresse et nom du titulaire identiques."
                 ok
               />
               <CheckItem
-                icon={<CreditCard className="h-3.5 w-3.5" />}
+                icon={<Banknote className="h-3.5 w-3.5" />}
                 label="Paiement du timbre"
-                detail="1 000 F CFA · Wave · Réf WV8827K"
+                detail="500 F CFA · Wave · Réf. WV8827K"
                 ok
               />
             </div>
