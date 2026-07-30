@@ -1,14 +1,56 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle, Upload, AlertCircle, ChevronRight, ArrowLeft, QrCode, Phone } from "lucide-react";
+import { CheckCircle, Upload, AlertCircle, ChevronRight, ArrowLeft, QrCode, Phone, Search, FileText } from "lucide-react";
 
-// ─── Types de documents disponibles ───
+// --- Types pour la structure des documents ---
+interface DocType {
+  id: string;
+  label: string;
+  groupe: string; // Code du groupe (ex: "G1")
+  prix: number;
+  delai: string;
+  disabled?: boolean;
+}
+
+interface GroupType {
+  code: string;
+  titre: string;
+  description: string;
+}
+
+// --- NOUVELLE STRUCTURE : Groupes de documents ---
+const GROUPES: GroupType[] = [
+  { code: "G1", titre: "Certificats d’adresse et de résidence", description: "Attestation de votre lieu de vie actuel." },
+  { code: "G2", titre: "Certificats de situation personnelle et familiale", description: "Documents relatifs à votre statut civil." },
+  { code: "G3", titre: "Certificats de vie, social et fiscal", description: "Justificatifs pour les organismes sociaux et administratifs." },
+  { code: "G4", titre: "Extraits, copies et duplicatas d’état civil", description: "Reproduction d'actes existants dans les registres." },
+  { code: "G5", titre: "Légalisation et conformité", description: "Authentification de signatures ou de copies de documents." },
+  { code: "G6", titre: "Déclarations et autorisations sensibles", description: "Démarches à caractère officiel et réglementé." },
+];
+
+// --- NOUVELLE STRUCTURE : Référentiel des documents par groupe ---
+// En production, ces données seraient chargées depuis une API (table `document_templates` versionnée par mairie)
 const DOCUMENTS = [
-  { id: "residence", label: "Certificat de résidence", prix: 500, delai: "< 3 min" },
-  { id: "naissance", label: "Acte de naissance (extrait)", prix: 1000, delai: "< 5 min" },
-  { id: "nationalite", label: "Certificat de nationalité", prix: 1500, delai: "< 5 min" },
-  { id: "legalisation", label: "Légalisation de signature", prix: 500, delai: "< 3 min" },
-  { id: "vie", label: "Certificat de vie", prix: 500, delai: "< 3 min" },
+  // --- G1: Certificats d’adresse et de résidence ---
+  { id: "residence", label: "Certificat de résidence", groupe: "G1", prix: 500, delai: "< 3 min" },
+  { id: "domicile", label: "Attestation de domicile", groupe: "G1", prix: 500, delai: "< 3 min", disabled: true },
+  { id: "hebergement", label: "Attestation d'hébergement", groupe: "G1", prix: 500, delai: "< 3 min", disabled: true },
+  // --- G2: Certificats de situation personnelle et familiale ---
+  { id: "celibat", label: "Certificat de célibat", groupe: "G2", prix: 1000, delai: "< 5 min", disabled: true },
+  { id: "non-remariage", label: "Certificat de non-remariage", groupe: "G2", prix: 1000, delai: "< 5 min", disabled: true },
+  // --- G3: Certificats de vie, social et fiscal ---
+  { id: "vie", label: "Certificat de vie", groupe: "G3", prix: 500, delai: "< 3 min" },
+  { id: "indigence", label: "Certificat d'indigence", groupe: "G3", prix: 0, delai: "< 5 min", disabled: true },
+  // --- G4: Extraits, copies et duplicatas d’état civil ---
+  { id: "naissance", label: "Extrait d'acte de naissance", groupe: "G4", prix: 1000, delai: "< 5 min" },
+  { id: "mariage", label: "Extrait d'acte de mariage", groupe: "G4", prix: 2000, delai: "< 5 min", disabled: true },
+  { id: "deces", label: "Extrait d'acte de décès", groupe: "G4", prix: 1000, delai: "< 5 min", disabled: true },
+  // --- G5: Légalisation et conformité ---
+  { id: "legalisation", label: "Légalisation de signature", groupe: "G5", prix: 500, delai: "< 3 min" },
+  { id: "copie", label: "Certification de copie conforme", groupe: "G5", prix: 500, delai: "< 3 min", disabled: true },
+  // --- G6: Déclarations et autorisations sensibles ---
+  { id: "declaration-deces", label: "Déclaration de décès", groupe: "G6", prix: 0, delai: "Variable", disabled: true },
+  { id: "permis-inhumer", label: "Permis d'inhumer", groupe: "G6", prix: 5000, delai: "Variable", disabled: true },
 ];
 
 const ETAPES = ["Document", "Informations", "Pièces", "Paiement", "QR Code"];
@@ -86,10 +128,11 @@ function QRCodeDisplay({ reference }: { reference: string }) {
 // ─── PAGE PRINCIPALE ───
 export default function Citoyen() {
   const [etape, setEtape] = useState(0);
-  const [docChoisi, setDocChoisi] = useState<any>(null);
+  const [docChoisi, setDocChoisi] = useState<DocType | null>(null); // Typage plus précis
   const [mairie, setMairie] = useState("");
   const [heberge, setHeberge] = useState(false);
   const [paiement, setPaiement] = useState("wave");
+  const [recherche, setRecherche] = useState("");
   const [form, setForm] = useState({ nom: "", prenom: "", dateNaissance: "", adresse: "", quartier: "", telephone: "", email: "" });
   const [fichiers, setFichiers] = useState<any>({ cni: null, domicile: null, hebergement: null });
   const [reference] = useState(`KDC-2026-${String(Math.floor(Math.random() * 90000 + 10000))}`);
@@ -103,6 +146,14 @@ export default function Citoyen() {
   const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white";
   const labelCls = "text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5";
 
+  const documentsFiltres = DOCUMENTS.filter(doc =>
+    doc.label.toLowerCase().includes(recherche.toLowerCase())
+  );
+
+  // Regroupe les documents filtrés par leur groupe
+  // En production, cette logique serait gérée côté backend ou par un store global
+  // pour éviter de re-calculer à chaque rendu.
+  
   return (
     <div className="min-h-screen bg-[#F0F2F5]">
       {/* Header */}
@@ -142,22 +193,42 @@ export default function Citoyen() {
                   {MAIRIES.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
-              <div className={labelCls} style={{ marginBottom: 12 }}>Document souhaité</div>
-              <div className="space-y-3">
-                {DOCUMENTS.map(doc => (
-                  <button key={doc.id} onClick={() => setDocChoisi(doc)}
-                    className={`w-full text-left border-2 rounded-xl p-4 transition-all flex items-center justify-between
-                      ${docChoisi?.id === doc.id ? "border-[#009A44] bg-green-50" : "border-gray-100 hover:border-gray-200"}`}>
-                    <div>
-                      <div className="font-semibold text-sm text-[#0A2540]">{doc.label}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">Délivré en {doc.delai}</div>
+              <div className="relative mb-4">
+                <label className={labelCls}>Rechercher un document</label>
+                <Search size={16} className="absolute left-4 top-10 text-gray-400" />
+                <input
+                  type="text"
+                  value={recherche}
+                  onChange={e => setRecherche(e.target.value)}
+                  placeholder="Ex: résidence, naissance..."
+                  className={`${inputCls} pl-10`}
+                />
+              </div>
+              <div className="space-y-4">
+                {GROUPES.map(groupe => {
+                  const docsDuGroupe = documentsFiltres.filter(d => d.groupe === groupe.code);
+                  if (docsDuGroupe.length === 0) return null; // N'affiche pas le groupe s'il n'y a pas de documents filtrés
+                  return (
+                    <div key={groupe.code}>
+                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{groupe.titre}</h3>
+                      <p className="text-xs text-gray-500 mb-3">{groupe.description}</p>
+                      {docsDuGroupe.map(doc => (
+                        <button key={doc.id} onClick={() => setDocChoisi(doc)} disabled={doc.disabled}
+                          className={`w-full text-left border-2 rounded-xl p-4 transition-all flex items-center justify-between mb-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50
+                            ${docChoisi?.id === doc.id ? "border-[#009A44] bg-green-50" : "border-gray-100 hover:border-gray-200"}`}>
+                          <div>
+                            <div className="font-semibold text-sm text-[#0A2540]">{doc.label}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">{doc.disabled ? "Bientôt disponible" : `Délivré en ${doc.delai}`}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-[#009A44] text-sm">{doc.prix} FCFA</div>
+                            {docChoisi?.id === doc.id && <CheckCircle size={16} className="text-green-500 ml-auto mt-1" />}
+                          </div>
+                        </button>
+                      ))}
                     </div>
-                    <div className="text-right">
-                      <div className="font-bold text-[#009A44] text-sm">{doc.prix} FCFA</div>
-                      {docChoisi?.id === doc.id && <CheckCircle size={16} className="text-green-500 ml-auto mt-1" />}
-                    </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
               <button onClick={() => setEtape(1)} disabled={!docChoisi || !mairie}
                 className="mt-6 w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
@@ -338,7 +409,7 @@ export default function Citoyen() {
 
           {/* ── ÉTAPE 4 : QR Code ── */}
           {etape === 4 && (
-            <div className="text-center">
+            <div className="text-center" data-statut="EN_ATTENTE_GUICHET"> {/* Statut pour le backend */}
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle size={32} className="text-green-600" />
               </div>
@@ -347,7 +418,7 @@ export default function Citoyen() {
 
               <div className="flex justify-center mb-4">
                 <QRCodeDisplay reference={reference} />
-              </div>
+              </div> {/* En production, ce QR code serait généré par le backend */}
               <div className="font-mono text-sm text-gray-500 mb-1">{reference}</div>
               <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
                 ⏳ En attente validation au guichet
@@ -374,8 +445,17 @@ export default function Citoyen() {
 
               {/* Actions */}
               <div className="space-y-3">
-                <button className="w-full py-3 bg-[#0A2540] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2">
-                  <QrCode size={16} /> Télécharger le QR Code
+                <button
+                  onClick={() => {
+                    alert("Dossier annulé.\nEn production, le statut du dossier passerait à 'ANNULE_PAR_UTILISATEUR' (Soft Delete).");
+                    setEtape(0);
+                    setDocChoisi(null); // Réinitialise la sélection du document
+                  }}
+                  className="w-full py-2 border-2 border-red-100 text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-200 font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors">
+                  🗑️ Annuler ma demande
+                </button>
+                <button className="w-full py-3 bg-[#0A2540] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 mt-4!">
+                  <QrCode size={16} /> Télécharger le QR Code {/* En production, ce bouton déclencherait un téléchargement réel */}
                 </button>
                 <button className="w-full py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
                   📲 Envoyer par WhatsApp
@@ -394,7 +474,7 @@ export default function Citoyen() {
 
         {/* Info bas de page */}
         {etape < 4 && (
-          <div className="mt-4 flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl p-3">
+          <div className="mt-4 flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl p-3"> {/* Cette section pourrait être un composant réutilisable */}
             <AlertCircle size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
             <p className="text-xs text-blue-700">
               <strong>Vous n'avez pas de smartphone ?</strong> Rendez-vous dans un cybercafé partenaire ou directement au guichet d'accueil de votre mairie. Un agent vous assistera gratuitement.

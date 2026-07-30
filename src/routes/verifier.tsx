@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import {
+import { // Importation des icônes nécessaires
   ArrowLeft,
   QrCode,
   ShieldCheck,
@@ -37,11 +37,26 @@ export const Route = createFileRoute("/verifier")({
   component: VerifierPage,
 });
 
-type Result = null | "valid" | "invalid";
+// Type pour le statut de la vérification
+type VerificationStatus = null | "valid" | "invalid";
+
+// Interface pour les données d'un document vérifié
+interface DocumentVerifie {
+  reference: string;
+  type: string;
+  beneficiaire: string;
+  mairie: string;
+  date_emission: string;
+  date_expiration: string;
+  signe_par: string;
+  hash: string;
+  statut: "valide" | "invalide"; // Le statut réel du document
+}
 
 function VerifierPage() {
   const [ref, setRef] = useState("");
-  const [result, setResult] = useState<Result>(null);
+  const [result, setResult] = useState<VerificationStatus>(null);
+  const [documentData, setDocumentData] = useState<DocumentVerifie | null>(null); // Pour stocker les données du document valide
 
   function handleCheck(e: React.FormEvent) {
     e.preventDefault();
@@ -52,12 +67,30 @@ function VerifierPage() {
   }
 
   function useExample() {
-    setRef("KD-2026-04128");
-    setResult("valid");
+    const exampleRef = "KDC-2026-04128";
+    setRef(exampleRef);
+    // En production, cette fonction appellerait une API pour récupérer les données du document
+    setDocumentData({
+      reference: exampleRef,
+      type: "Certificat de résidence",
+      beneficiaire: "KOUASSI Adjoua Marie",
+      mairie: "Cocody, Abidjan",
+      date_emission: "24 juillet 2026",
+      date_expiration: "24 juillet 2027",
+      signe_par: "Mme le Maire — 24/07/2026",
+      hash: "a7f3c2e19b4d8f21c3e5a7b9d1f3c5e7a9b1d3f5", // Hash simulé
+      statut: "valide",
+    });
+    setResult("valid"); // Simule un résultat valide
   }
 
   return (
     <div className="min-h-screen bg-background">
+      {/*
+        En production, SiteHeader et SiteFooter seraient des composants réutilisables
+        qui pourraient être importés depuis un dossier `components`.
+        Ils sont déjà présents dans le contexte, donc je les garde.
+      */}
       <SiteHeader />
 
       {/* Hero + outil de vérification */}
@@ -120,6 +153,14 @@ function VerifierPage() {
                     <div className="text-xs text-muted-foreground">
                       Ouvrir la caméra — le résultat s'affiche instantanément
                     </div>
+                    {/*
+                      Note: Pour les agents en mairie, le scan et l'OCR fonctionnent 100% hors-ligne.
+                      Pour cette page publique, un scan réel nécessiterait l'accès à la caméra et une bibliothèque de lecture de QR code.
+                    */}
+                    <div className="mt-2 text-[10px] text-primary/60">
+                      Note: Pour les agents en mairie, le scan et l'OCR
+                      fonctionnent 100% hors-ligne.
+                    </div>
                   </div>
                 </button>
 
@@ -158,7 +199,7 @@ function VerifierPage() {
                   </button>
                 </form>
 
-                {/* Résultat */}
+                {/* Résultat de la vérification */}
                 {result && <ResultCard variant={result} refValue={ref} />}
               </div>
             </div>
@@ -172,7 +213,10 @@ function VerifierPage() {
           <h2 className="font-display text-3xl font-bold tracking-tight text-foreground">
             La fin des faux documents d'état civil.
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="mt-3 text-muted-foreground"> {/* Cette section explique le mécanisme de sécurité */}
+            {/*
+              En production, cette description pourrait être plus détaillée et inclure des liens vers la législation.
+            */}
             Chaque document émis via KronoDoc CI est scellé par une signature
             cryptographique (SHA-256) liée à l'officier. Toute modification
             invalide le sceau — impossible de contrefaire.
@@ -184,13 +228,18 @@ function VerifierPage() {
             step="01"
             icon={<QrCode className="h-5 w-5" />}
             title="Le QR est unique"
-            desc="Généré lors de la signature de l'officier. Il contient un lien signé et un hash du document."
+            desc="Généré lors de la signature de l'officier. Il contient un lien signé et un hash du document." // Le QR code est la clé de l'authenticité
           />
           <StepCard
             step="02"
             icon={<Scan className="h-5 w-5" />}
             title="Le scan interroge KronoDoc"
-            desc="Le serveur compare le hash au document original archivé. Si tout concorde, il renvoie les données publiques."
+            desc="Le serveur compare le hash au document original archivé. Si tout concorde, il renvoie les données publiques." // Interaction avec le backend pour la vérification
+            // En production, cette étape impliquerait un appel API sécurisé au backend de KronoDoc
+            // pour valider le hash du document et récupérer ses métadonnées.
+            // Le backend devrait avoir une API dédiée à la vérification publique,
+            // qui ne renvoie que les informations nécessaires à l'authentification
+            // (type de document, bénéficiaire, mairie, dates, statut), sans données sensibles.
           />
           <StepCard
             step="03"
@@ -282,20 +331,23 @@ function AudienceCard({
   );
 }
 
-function ResultCard({ variant, refValue }: { variant: "valid" | "invalid"; refValue: string }) {
+function ResultCard({ variant, refValue, documentData }: { variant: "valid" | "invalid"; refValue: string; documentData: DocumentVerifie | null }) {
   if (variant === "valid") {
+    // Affichage des détails du document si valide
+    // En production, ces données proviendraient de `documentData` après un appel API réussi.
+    const doc = documentData || DOC_VALIDE; // Utilise les données réelles si disponibles, sinon le mockup
     return (
       <div className="mt-6 overflow-hidden rounded-xl border border-success/40 bg-success/5">
         <div className="flex items-center gap-2 bg-success px-4 py-2.5 text-sm font-bold text-success-foreground">
           <CheckCircle2 className="h-4 w-4" />
           Document authentique
         </div>
-        <div className="space-y-2 p-4 text-sm">
-          <Row label="Type" value="Certificat de résidence" />
-          <Row label="Titulaire" value="KOUASSI Adjoua Marie" />
-          <Row label="Mairie émettrice" value="Cocody, Abidjan" />
-          <Row label="Signé par" value="Mme le Maire — 24/07/2026" />
-          <Row label="Référence" value={refValue || "KD-2026-04128"} />
+        <div className="space-y-2 p-4 text-sm"> {/* Affichage des propriétés du document */}
+          <Row label="Type" value={doc.type} />
+          <Row label="Titulaire" value={doc.beneficiaire} />
+          <Row label="Mairie émettrice" value={doc.mairie} />
+          <Row label="Signé par" value={doc.signe_par} />
+          <Row label="Référence" value={doc.reference} />
           <div className="mt-3 flex items-center gap-2 rounded-md bg-card px-3 py-2 text-xs text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5 text-success" />
             Sceau cryptographique vérifié · SHA-256

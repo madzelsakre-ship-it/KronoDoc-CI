@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle, XCircle, AlertTriangle, Clock, ChevronRight, Search, Camera, BarChart2, FileText, Settings, LogOut, User } from "lucide-react";
+import { CheckCircle, XCircle, AlertTriangle, Clock, ChevronRight, Search, Camera, BarChart2, FileText, Settings, LogOut, User, ScanLine } from "lucide-react";
 
 // ─── Données simulées ───
 const QUEUE = [
@@ -32,10 +32,10 @@ const DOSSIER = {
 };
 
 const NAV = [
-  { icon: FileText, label: "File d'attente", badge: 7 },
-  { icon: Camera, label: "Scanner QR" },
-  { icon: BarChart2, label: "Statistiques" },
-  { icon: Search, label: "Rechercher" },
+  { icon: FileText, label: "File d'attente", badge: QUEUE.length }, // Badge dynamique
+  { icon: ScanLine, label: "Scanner QR" }, // Utilisation de ScanLine pour le scan
+  { icon: BarChart2, label: "Statistiques" }, // Tableau de bord décisionnel
+  { icon: Search, label: "Rechercher un dossier" }, // Recherche de dossiers
 ];
 
 // ─── Badge statut ───
@@ -52,6 +52,9 @@ function StatutBadge({ statut }: { statut: string }) {
 
 // ─── Scanner QR simulé ───
 function ScannerModal({ onClose, onScan }: any) {
+  // En production, cette modal utiliserait la caméra de l'appareil
+  // et une bibliothèque de lecture de QR code (ex: instascan, html5-qrcode).
+  // Le traitement serait 100% offline pour la résilience.
   const [scanning, setScanning] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -108,6 +111,7 @@ function ScannerModal({ onClose, onScan }: any) {
 
 // ─── Modal rejet ───
 function RejetModal({ onClose, onConfirm }: any) {
+  // En production, les motifs de rejet seraient configurables et tracés dans les audit_logs.
   const [motif, setMotif] = useState("");
   const MOTIFS = [
     "Document expiré ou illisible",
@@ -157,6 +161,7 @@ export default function Agent() {
   const [showScanner, setShowScanner] = useState(false);
   const [showRejet, setShowRejet] = useState(false);
   const [statuts, setStatuts] = useState<any>({});
+  // En production, les statuts seraient gérés par le backend et mis à jour via WebSockets ou polling.
   const [notification, setNotification] = useState<string | null>(null);
 
   const toggleCheck = (i: number) => {
@@ -169,11 +174,13 @@ export default function Agent() {
   };
 
   const valider = () => {
+    // En production, cette action déclencherait un appel API au backend
+    // pour changer le statut du dossier et l'envoyer au parapheur de l'officier.
     setStatuts({ ...statuts, [DOSSIER.id]: "valide" });
     setDossierOuvert(false);
     notifier("✅ Dossier validé — Envoyé au parapheur de l'officier");
   };
-
+  
   const rejeter = (motif: string) => {
     setStatuts({ ...statuts, [DOSSIER.id]: "rejete" });
     setDossierOuvert(false);
@@ -181,6 +188,7 @@ export default function Agent() {
   };
 
   const checklistItems = [
+    // Ces éléments de checklist seraient dynamiques en fonction du type de document et de la fiche de prélèvement.
     "CNI originale présentée et conforme",
     "Justificatif de domicile original vérifié",
     "Numéro CNI corrigé manuellement (CI0234781)",
@@ -194,6 +202,7 @@ export default function Agent() {
     <div className="min-h-screen bg-[#F0F2F5] flex flex-col">
       {/* Notification toast */}
       {notification && (
+        // Ce composant de notification serait un composant réutilisable.
         <div className="fixed top-4 right-4 z-50 bg-[#0A2540] text-white px-4 py-3 rounded-xl text-sm font-medium shadow-lg">
           {notification}
         </div>
@@ -225,7 +234,7 @@ export default function Agent() {
         <aside className="w-52 bg-[#0A2540] flex flex-col py-4 flex-shrink-0">
           {NAV.map((item, i) => (
             <button key={i} onClick={() => { setNavActif(i); if (i === 1) setShowScanner(true); }}
-              className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left
+              className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left focus:outline-none focus:ring-2 focus:ring-[#009A44]
                 ${navActif === i ? "bg-white/10 text-white border-l-2 border-[#009A44]" : "text-white/50 hover:text-white/80"}`}>
               <item.icon size={16} />
               <span>{item.label}</span>
@@ -233,6 +242,7 @@ export default function Agent() {
             </button>
           ))}
           <div className="mt-auto px-3">
+            {/* Ces statistiques seraient récupérées via une API de tableau de bord */}
             <div className="bg-white/5 rounded-xl p-3">
               <div className="text-[10px] text-white/40 uppercase tracking-wide mb-2">Aujourd'hui</div>
               <div className="flex justify-between text-xs">
@@ -245,7 +255,7 @@ export default function Agent() {
               </div>
             </div>
           </div>
-          <button className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/30 hover:text-white/60 mt-2">
+          <button className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/30 hover:text-white/60 mt-2 focus:outline-none focus:ring-2 focus:ring-[#009A44]">
             <Settings size={16} /> Paramètres
           </button>
         </aside>
@@ -257,7 +267,7 @@ export default function Agent() {
             {/* File d'attente */}
             <div className="col-span-2">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-bold text-[#0A2540]">File d'attente <span className="text-gray-400 font-normal">({QUEUE.length})</span></h2>
+                <h2 className="text-sm font-bold text-[#0A2540]">File d'attente <span className="text-gray-400 font-normal">({QUEUE.filter(item => item.statut === "en_attente" || item.statut === "ocr_ok").length})</span></h2>
                 <button onClick={() => setShowScanner(true)}
                   className="flex items-center gap-1.5 bg-[#009A44] text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors">
                   <Camera size={13} /> Scanner QR
@@ -265,6 +275,7 @@ export default function Agent() {
               </div>
 
               <div className="space-y-2">
+                {/* En production, cette liste serait chargée dynamiquement depuis le backend */}
                 {QUEUE.map((item) => (
                   <button key={item.id} onClick={() => setDossierOuvert(true)}
                     className={`w-full text-left bg-white border-2 rounded-xl p-3 transition-all hover:border-[#009A44]
@@ -293,6 +304,7 @@ export default function Agent() {
             {/* Dossier détail */}
             <div className="col-span-3">
               {!dossierOuvert ? (
+                // État initial quand aucun dossier n'est ouvert
                 <div className="bg-white rounded-2xl border border-gray-100 h-full flex flex-col items-center justify-center text-center p-8">
                   <Camera size={36} className="text-gray-200 mb-3" />
                   <div className="text-sm font-semibold text-gray-400 mb-1">Aucun dossier ouvert</div>
@@ -304,6 +316,7 @@ export default function Agent() {
                 </div>
               ) : (
                 <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                  {/* En production, ces données seraient chargées depuis le backend */}
                   {/* En-tête dossier */}
                   <div className="border-b border-gray-100 px-5 py-4 flex items-center justify-between">
                     <div>
@@ -323,6 +336,7 @@ export default function Agent() {
                   <div className="p-5 space-y-4 overflow-auto max-h-[calc(100vh-220px)]">
                     {/* Données injectées */}
                     <div>
+                      {/* Ces données proviennent de la pré-demande citoyen */}
                       <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
                         Données injectées automatiquement via QR Code
                       </div>
@@ -342,6 +356,10 @@ export default function Agent() {
                     </div>
 
                     {/* OCR Analyse */}
+                    {/*
+                      En production, l'OCR serait une intégration réelle (ex: Google ML Kit, Tesseract.js)
+                      qui comparerait les données extraites des pièces scannées avec les données de la pré-demande.
+                    */}
                     <div className={`rounded-xl p-4 border ${incohérences > 0 ? "bg-amber-50 border-amber-200" : "bg-green-50 border-green-200"}`}>
                       <div className={`flex items-center gap-2 text-sm font-bold mb-3 ${incohérences > 0 ? "text-amber-800" : "text-green-800"}`}>
                         {incohérences > 0 ? <AlertTriangle size={16} /> : <CheckCircle size={16} />}
@@ -372,6 +390,7 @@ export default function Agent() {
 
                     {/* Checklist originaux */}
                     <div>
+                      {/* La checklist serait dynamique en fonction du type de document */}
                       <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">
                         Vérification des originaux papier
                       </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle, FileText, BarChart2, Search, LogOut, Eye, PenTool, Download, Send, Shield, Clock, TrendingUp, Users } from "lucide-react";
+import { CheckCircle, FileText, BarChart2, Search, LogOut, Eye, PenTool, Download, Send, Shield, Clock, TrendingUp, Users, Settings } from "lucide-react";
 
 // ─── Données simulées ───
 const DOSSIERS = [
@@ -12,10 +12,10 @@ const DOSSIERS = [
 ];
 
 const NAV = [
-  { icon: PenTool, label: "Parapheur", badge: 5 },
-  { icon: CheckCircle, label: "Signés aujourd'hui" },
-  { icon: BarChart2, label: "Rapports" },
-  { icon: Search, label: "Vérifier document" },
+  { icon: PenTool, label: "Parapheur", badge: DOSSIERS.length }, // Badge dynamique
+  { icon: CheckCircle, label: "Signés aujourd'hui" }, // Historique des signatures
+  { icon: BarChart2, label: "Rapports" }, // Tableau de bord décisionnel
+  { icon: Search, label: "Vérifier document" }, // Accès rapide à la vérification
 ];
 
 // ─── QR Code simulé ───
@@ -46,6 +46,7 @@ function MiniQR() {
 
 // ─── Aperçu document ───
 function DocPreview({ dossier, signe }: any) {
+  // En production, ce composant générerait un aperçu réel du PDF/A
   const today = new Date().toLocaleDateString("fr-FR", { day:"numeric", month:"long", year:"numeric" });
   const hash = "a7f3c2e19b4d..." + dossier.id.slice(-4);
   return (
@@ -127,6 +128,7 @@ function DocPreview({ dossier, signe }: any) {
 
 // ─── Modal confirmation signature ───
 function SignModal({ dossier, onConfirm, onClose }: any) {
+  // En production, cette modal intégrerait un service de signature électronique forte (ex: PKI, OTP)
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -198,11 +200,13 @@ export default function Officier() {
   const [signTout, setSignTout] = useState(false);
 
   const notifier = (msg: string) => {
+    // Composant de notification réutilisable
     setNotification(msg);
     setTimeout(() => setNotification(null), 4000);
   };
 
   const signer = (id: string) => {
+    // En production, cette action déclencherait l'appel au service de signature électronique
     setSignes(prev => [...prev, id]);
     notifier(`✅ Document signé — SMS + WhatsApp envoyés à ${dossierActif.nom}`);
   };
@@ -215,6 +219,7 @@ export default function Officier() {
 
   const dossiersRestants = DOSSIERS.filter(d => !signes.includes(d.id));
 
+  // En production, les données seraient chargées depuis une API backend
   return (
     <div className="min-h-screen bg-[#F0F2F5] flex flex-col">
       {/* Toast */}
@@ -252,7 +257,7 @@ export default function Officier() {
         <aside className="w-52 bg-[#0A2540] flex flex-col py-4 flex-shrink-0">
           {NAV.map((item, i) => (
             <button key={i} onClick={() => setNavActif(i)}
-              className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left
+              className={`flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left focus:outline-none focus:ring-2 focus:ring-[#F77F00]
                 ${navActif === i ? "bg-white/10 text-white border-l-2 border-[#F77F00]" : "text-white/50 hover:text-white/80"}`}>
               <item.icon size={16} />
               <span>{item.label}</span>
@@ -265,6 +270,7 @@ export default function Officier() {
           ))}
 
           <div className="mt-auto px-3 space-y-2">
+            {/* Ces statistiques seraient récupérées via une API de tableau de bord */}
             <div className="bg-white/5 rounded-xl p-3">
               <div className="text-[10px] text-white/40 uppercase tracking-wide mb-2">Aujourd'hui</div>
               <div className="flex justify-between text-xs mb-1">
@@ -281,7 +287,7 @@ export default function Officier() {
               </div>
             </div>
           </div>
-
+          {/* Bouton Paramètres */}
           <button className="flex items-center gap-3 px-4 py-2.5 text-sm text-white/30 hover:text-white/60 mt-2">
             <Shield size={16} /> Sécurité
           </button>
@@ -290,6 +296,7 @@ export default function Officier() {
         {/* Contenu */}
         <main className="flex-1 overflow-auto p-5">
           {/* Stats */}
+          {/* Ces statistiques seraient dynamiques et proviendraient d'une API */}
           <div className="grid grid-cols-4 gap-3 mb-5">
             {[
               { icon: Clock, label: "En attente", value: dossiersRestants.length, color: "text-amber-600" },
@@ -317,6 +324,7 @@ export default function Officier() {
               </div>
 
               {/* Bouton tout signer */}
+              {/* La signature groupée serait une fonctionnalité clé pour l'efficacité */}
               {dossiersRestants.length > 0 && (
                 <button onClick={signerTout}
                   className="w-full mb-3 py-2.5 bg-[#F77F00] text-white font-bold rounded-xl text-xs hover:bg-orange-600 transition-colors flex items-center justify-center gap-2">
@@ -326,6 +334,7 @@ export default function Officier() {
 
               <div className="space-y-2">
                 {DOSSIERS.map(d => {
+                  // En production, les dossiers seraient chargés depuis le backend
                   const estSigne = signes.includes(d.id);
                   return (
                     <button key={d.id} onClick={() => setDossierActif(d)}
@@ -364,6 +373,7 @@ export default function Officier() {
               {dossierActif && (
                 <>
                   {/* Actions rapides */}
+                  {/* Ces actions interagiraient avec le backend */}
                   <div className="bg-white border border-gray-100 rounded-xl p-4 flex items-center gap-3">
                     <div className="flex-1">
                       <div className="font-bold text-[#0A2540] text-sm">{dossierActif.nom}</div>
@@ -371,10 +381,10 @@ export default function Officier() {
                     </div>
                     <div className="flex gap-2">
                       <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium hover:bg-gray-50 transition-colors">
-                        <Eye size={13} /> Aperçu
+                        <Eye size={13} /> Aperçu {/* Ouvrirait une modal ou une nouvelle page avec le PDF */}
                       </button>
                       <button className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-xl text-xs font-medium hover:bg-gray-50 transition-colors">
-                        <Download size={13} /> PDF
+                        <Download size={13} /> PDF {/* Téléchargerait le PDF signé */}
                       </button>
                       {!signes.includes(dossierActif.id) ? (
                         <button onClick={() => setShowSignModal(true)}
@@ -397,6 +407,7 @@ export default function Officier() {
                   <DocPreview dossier={dossierActif} signe={signes.includes(dossierActif.id)} />
 
                   {/* Info envoi */}
+                  {/* Cette section confirmerait l'envoi et les canaux utilisés */}
                   {signes.includes(dossierActif.id) && (
                     <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
                       <div className="text-xs font-bold text-blue-800 mb-2 flex items-center gap-2">

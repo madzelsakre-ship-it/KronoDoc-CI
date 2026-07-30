@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Shield, CheckCircle, XCircle, AlertTriangle, QrCode } from "lucide-react";
+import { Search, Shield, CheckCircle, XCircle, AlertTriangle, QrCode, Loader2 } from "lucide-react";
 
 // ─── Document simulé trouvé ───
 const DOC_VALIDE = {
@@ -14,6 +14,7 @@ const DOC_VALIDE = {
   hash: "a7f3c2e19b4d8f21c3e5a7b9d1f3c5e7a9b1d3f5",
   statut: "valide",
 };
+// En production, ces données proviendraient d'une API backend sécurisée.
 
 // ─── QR Code simulé ───
 function QRDisplay() {
@@ -44,6 +45,7 @@ function QRDisplay() {
 // ─── Résultat de vérification ───
 function ResultatVerification({ doc, onReset }: any) {
   const estValide = doc.statut === "valide";
+  // Ce composant afficherait les détails du document ou un message d'erreur.
   return (
     <div className="space-y-4">
       {/* Statut principal */}
@@ -131,12 +133,15 @@ export default function Verifier() {
   const [loading, setLoading] = useState(false);
   const [resultat, setResultat] = useState<any>(null);
 
+  // En production, cette fonction ferait un appel API au backend pour vérifier la référence.
   const verifierParReference = () => {
     if (!reference.trim()) return;
     setLoading(true);
     setTimeout(() => {
+      // Simulation de la réponse du backend
       setResultat(reference.toUpperCase().includes("KDC") ? DOC_VALIDE : { statut: "invalide" });
       setMode("resultat");
+      // En cas de succès, le backend renverrait toutes les données du document pour affichage.
       setLoading(false);
     }, 1500);
   };
@@ -144,6 +149,7 @@ export default function Verifier() {
   const simulerScan = () => {
     setLoading(true);
     setTimeout(() => {
+      // Simulation de la réponse du backend après un scan réussi
       setResultat(DOC_VALIDE);
       setMode("resultat");
       setLoading(false);
@@ -152,6 +158,7 @@ export default function Verifier() {
 
   return (
     <div className="min-h-screen bg-[#F0F2F5]">
+      {/* Header du site, réutilisable */}
       {/* Header */}
       <header className="bg-[#0A2540] text-white px-6 py-4 flex items-center gap-4">
         <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -164,6 +171,7 @@ export default function Verifier() {
 
       <div className="max-w-lg mx-auto px-4 py-10">
         {/* Titre */}
+        {/* Section d'accueil pour choisir le mode de vérification */}
         {mode === "accueil" && (
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-[#0A2540] rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -180,6 +188,7 @@ export default function Verifier() {
 
           {/* ── Accueil : choix du mode ── */}
           {mode === "accueil" && (
+            // Boutons pour choisir entre scan QR et saisie manuelle
             <div className="space-y-3">
               <button onClick={() => setMode("scan")}
                 className="w-full border-2 border-gray-100 hover:border-[#009A44] rounded-xl p-5 text-left transition-all group">
@@ -231,6 +240,7 @@ export default function Verifier() {
 
           {/* ── Saisie référence ── */}
           {mode === "reference" && (
+            // Formulaire pour saisir la référence manuellement
             <div>
               <button onClick={() => setMode("accueil")} className="text-xs text-gray-400 hover:text-gray-600 mb-4 flex items-center gap-1">
                 ← Retour
@@ -255,7 +265,7 @@ export default function Verifier() {
               <button onClick={verifierParReference} disabled={!reference.trim() || loading}
                 className="w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 hover:bg-green-700 transition-colors text-sm flex items-center justify-center gap-2">
                 {loading ? (
-                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Vérification...</>
+                  <><Loader2 className="w-4 h-4 animate-spin"/> Vérification...</>
                 ) : (
                   <><Search size={16} /> Vérifier l'authenticité</>
                 )}
@@ -265,6 +275,7 @@ export default function Verifier() {
 
           {/* ── Scanner QR ── */}
           {mode === "scan" && (
+            // Interface de scan QR simulée
             <div>
               <button onClick={() => setMode("accueil")} className="text-xs text-gray-400 hover:text-gray-600 mb-4 flex items-center gap-1">
                 ← Retour
@@ -275,7 +286,7 @@ export default function Verifier() {
               {/* Zone caméra simulée */}
               <div className="relative bg-gray-900 rounded-2xl h-64 flex flex-col items-center justify-center mb-4 overflow-hidden">
                 <div className="absolute inset-10 border-2 border-white/30 rounded-xl">
-                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#009A44] rounded-tl-lg" />
+                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-[#009A44] rounded-tl-lg" /> {/* Coins du cadre de scan */}
                   <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-[#009A44] rounded-tr-lg" />
                   <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-[#009A44] rounded-bl-lg" />
                   <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-[#009A44] rounded-br-lg" />
@@ -283,7 +294,7 @@ export default function Verifier() {
                 {loading ? (
                   <div className="text-center">
                     <div className="w-10 h-10 border-3 border-white/20 border-t-[#009A44] rounded-full animate-spin mx-auto mb-2" />
-                    <div className="text-white text-sm">Analyse en cours...</div>
+                    <div className="text-white text-sm">Analyse en cours...</div> {/* Indicateur de chargement */}
                   </div>
                 ) : (
                   <div className="text-center">
@@ -294,6 +305,7 @@ export default function Verifier() {
               </div>
 
               {/* QR Code de démo */}
+              {/* Ce QR code est un exemple visuel pour la démo */}
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-4 flex items-center gap-4">
                 <QRDisplay />
                 <div>
@@ -304,8 +316,8 @@ export default function Verifier() {
 
               <button onClick={simulerScan} disabled={loading}
                 className="w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 hover:bg-green-700 transition-colors text-sm flex items-center justify-center gap-2">
-                {loading ? (
-                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> Vérification...</>
+                {loading ? ( {/* Bouton pour simuler le scan */}
+                  <><Loader2 className="w-4 h-4 animate-spin"/> Vérification...</>
                 ) : (
                   <><QrCode size={16} /> Scanner ce QR Code</>
                 )}
@@ -314,7 +326,7 @@ export default function Verifier() {
           )}
 
           {/* ── Résultat ── */}
-          {mode === "resultat" && resultat && (
+          {mode === "resultat" && resultat && ( // Affichage du résultat de la vérification
             <ResultatVerification doc={resultat} onReset={() => { setMode("accueil"); setResultat(null); setReference(""); }} />
           )}
         </div>
