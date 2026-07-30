@@ -53,6 +53,19 @@ interface DocumentVerifie {
   statut: "valide" | "invalide"; // Le statut réel du document
 }
 
+// Mockup data that was missing
+const DOC_VALIDE: DocumentVerifie = {
+  reference: "KDC-2026-04128",
+  type: "Certificat de résidence",
+  beneficiaire: "KOUASSI Adjoua Marie",
+  mairie: "Cocody, Abidjan",
+  date_emission: "24 juillet 2026",
+  date_expiration: "24 juillet 2027",
+  signe_par: "Mme le Maire — 24/07/2026",
+  hash: "a7f3c2e19b4d8f21c3e5a7b9d1f3c5e7a9b1d3f5", // Hash simulé
+  statut: "valide",
+};
+
 function VerifierPage() {
   const [ref, setRef] = useState("");
   const [result, setResult] = useState<VerificationStatus>(null);

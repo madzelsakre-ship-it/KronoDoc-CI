@@ -1,21 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import {
-  Smartphone,
   ArrowLeft,
   ArrowRight,
   Check,
   Upload,
   CreditCard,
   QrCode,
-  Home,
   FileText,
-  MessageCircle,
-  Wallet,
-  Camera,
-  ShieldCheck,
+  CheckCircle,
+  AlertCircle,
+  ChevronRight,
+  Phone,
+  Search,
 } from "lucide-react";
-import { SiteHeader } from "@/components/site-header";
-import { SiteFooter } from "@/components/site-footer";
 
 export const Route = createFileRoute("/citoyen")({
   head: () => ({
@@ -23,458 +21,527 @@ export const Route = createFileRoute("/citoyen")({
       { title: "Portail Citoyen — KronoDoc CI" },
       {
         name: "description",
-        content:
-          "Faites votre pré-demande d'acte d'état civil depuis votre mobile. Paiement Mobile Money, QR code, réception par WhatsApp.",
-      },
-      { property: "og:title", content: "Portail Citoyen — KronoDoc CI" },
-      {
-        property: "og:description",
-        content:
-          "Pré-demande, upload des pièces, paiement et QR code — depuis chez vous.",
+        content: "Faites votre pré-demande d'acte d'état civil depuis votre mobile.",
       },
     ],
   }),
-  component: CitoyenPage,
+  component: Citoyen,
 });
 
-function CitoyenPage() {
+
+// --- Types pour la structure des documents ---
+interface DocType {
+  id: string;
+  label: string;
+  groupe: string; // Code du groupe (ex: "G1")
+  prix: number;
+  delai: string;
+  disabled?: boolean;
+}
+
+interface GroupType {
+  code: string;
+  titre: string;
+  description: string;
+}
+
+// --- NOUVELLE STRUCTURE : Groupes de documents ---
+const GROUPES: GroupType[] = [
+  { code: "G1", titre: "Certificats d’adresse et de résidence", description: "Attestation de votre lieu de vie actuel." },
+  { code: "G2", titre: "Certificats de situation personnelle et familiale", description: "Documents relatifs à votre statut civil." },
+  { code: "G3", titre: "Certificats de vie, social et fiscal", description: "Justificatifs pour les organismes sociaux et administratifs." },
+  { code: "G4", titre: "Extraits, copies et duplicatas d’état civil", description: "Reproduction d'actes existants dans les registres." },
+  { code: "G5", titre: "Légalisation et conformité", description: "Authentification de signatures ou de copies de documents." },
+  { code: "G6", titre: "Déclarations et autorisations sensibles", description: "Démarches à caractère officiel et réglementé." },
+];
+
+// --- NOUVELLE STRUCTURE : Référentiel des documents par groupe ---
+// En production, ces données seraient chargées depuis une API (table `document_templates` versionnée par mairie)
+const DOCUMENTS = [
+  // --- G1: Certificats d’adresse et de résidence ---
+  { id: "residence", label: "Certificat de résidence", groupe: "G1", prix: 500, delai: "< 3 min" },
+  { id: "domicile", label: "Attestation de domicile", groupe: "G1", prix: 500, delai: "< 3 min", disabled: true },
+  { id: "hebergement", label: "Attestation d'hébergement", groupe: "G1", prix: 500, delai: "< 3 min", disabled: true },
+  // --- G2: Certificats de situation personnelle et familiale ---
+  { id: "celibat", label: "Certificat de célibat", groupe: "G2", prix: 1000, delai: "< 5 min", disabled: true },
+  { id: "non-remariage", label: "Certificat de non-remariage", groupe: "G2", prix: 1000, delai: "< 5 min", disabled: true },
+  // --- G3: Certificats de vie, social et fiscal ---
+  { id: "vie", label: "Certificat de vie", groupe: "G3", prix: 500, delai: "< 3 min" },
+  { id: "indigence", label: "Certificat d'indigence", groupe: "G3", prix: 0, delai: "< 5 min", disabled: true },
+  // --- G4: Extraits, copies et duplicatas d’état civil ---
+  { id: "naissance", label: "Extrait d'acte de naissance", groupe: "G4", prix: 1000, delai: "< 5 min" },
+  { id: "mariage", label: "Extrait d'acte de mariage", groupe: "G4", prix: 2000, delai: "< 5 min", disabled: true },
+  { id: "deces", label: "Extrait d'acte de décès", groupe: "G4", prix: 1000, delai: "< 5 min", disabled: true },
+  // --- G5: Légalisation et conformité ---
+  { id: "legalisation", label: "Légalisation de signature", groupe: "G5", prix: 500, delai: "< 3 min" },
+  { id: "copie", label: "Certification de copie conforme", groupe: "G5", prix: 500, delai: "< 3 min", disabled: true },
+  // --- G6: Déclarations et autorisations sensibles ---
+  { id: "declaration-deces", label: "Déclaration de décès", groupe: "G6", prix: 0, delai: "Variable", disabled: true },
+  { id: "permis-inhumer", label: "Permis d'inhumer", groupe: "G6", prix: 5000, delai: "Variable", disabled: true },
+];
+
+const ETAPES = ["Document", "Informations", "Pièces", "Paiement", "QR Code"];
+
+const MAIRIES = [
+  "Mairie de Cocody", "Mairie de Yopougon", "Mairie de Abobo",
+  "Mairie de Adjamé", "Mairie de Plateau", "Mairie de Treichville",
+  "Mairie de Marcory", "Mairie de Koumassi", "Mairie de Port-Bouët",
+];
+
+// ─── Composant Progress ───
+function Progress({ etape }: { etape: number }) {
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
+    <div className="flex items-center justify-center gap-0 mb-8">
+      {ETAPES.map((label, i) => (
+        <div key={i} className="flex items-center">
+          <div className="flex flex-col items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all
+              ${i < etape ? "bg-green-600 text-white" : i === etape ? "bg-[#0A2540] text-white ring-4 ring-blue-100" : "bg-gray-100 text-gray-400"}`}>
+              {i < etape ? "✓" : i + 1}
+            </div>
+            <span className={`text-[10px] mt-1 font-medium ${i === etape ? "text-[#0A2540]" : "text-gray-400"}`}>
+              {label}
+            </span>
+          </div>
+          {i < ETAPES.length - 1 && (
+            <div className={`w-10 h-0.5 mb-4 mx-1 ${i < etape ? "bg-green-500" : "bg-gray-200"}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
-      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:py-16">
-        <Link
-          to="/"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Retour à l'accueil
+// ─── Composant Upload ───
+function UploadZone({ label, hint, done, onFile }: any) {
+  return (
+    <div>
+      <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">{label}</label>
+      <label className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all
+        ${done ? "border-green-400 bg-green-50" : "border-gray-200 bg-gray-50 hover:border-[#009A44] hover:bg-green-50"}`}>
+        <input type="file" className="hidden" accept="image/*,.pdf" onChange={onFile} />
+        {done ? (
+          <>
+            <CheckCircle size={22} className="text-green-500 mb-1" />
+            <span className="text-xs text-green-700 font-semibold">{done}</span>
+          </>
+        ) : (
+          <>
+            <Upload size={20} className="text-gray-400 mb-1" />
+            <span className="text-xs text-gray-500 text-center">{hint}</span>
+          </>
+        )}
+      </label>
+    </div>
+  );
+}
+
+// ─── QR Code simulé ───
+function QRCodeDisplay({ reference }: { reference: string }) {
+  const cells = Array.from({ length: 12 }, (_, i) => Array.from({ length: 12 }, (_, j) => (i + j) % 3 !== 0));
+  return (
+    <div className="inline-block p-3 bg-white border-4 border-black rounded-lg">
+      {cells.map((row, i) => (
+        <div key={i} className="flex">
+          {row.map((on, j) => (
+            <div key={j} className={`w-3 h-3 ${on ? "bg-black" : "bg-white"}`} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Définition des champs pour les fiches de prélèvement dynamiques ---
+const FICHES_PRELEVEMENT: Record<string, { key: string, label: string, placeholder: string, type?: string }[]> = {
+  "G1": [ // Adresse et résidence
+    { key: "adresse", label: "Adresse complète concernée", placeholder: "Lot 47, Rue J24..." },
+    { key: "quartier", label: "Quartier / Commune", placeholder: "Cocody Angré 7e tranche" },
+    { key: "occupation", label: "Situation d'occupation", placeholder: "Propriétaire, locataire, hébergé(e)..." },
+  ],
+  "G4": [ // Extraits, copies et duplicatas
+    { key: "acteNumero", label: "Numéro de l'acte (si connu)", placeholder: "Ex: 1234/2023" },
+    { key: "acteAnnee", label: "Année de l'acte (si connue)", placeholder: "Ex: 2023" },
+    { key: "nomPere", label: "Noms & Prénoms du père", placeholder: "KONAN Jean-Pierre" },
+    { key: "nomMere", label: "Noms & Prénoms de la mère", placeholder: "KOUAME Ahou" },
+  ],
+  // Les autres groupes (G2, G3, G5, G6) auraient leurs propres champs ici.
+};
+
+// --- Composant de formulaire dynamique ---
+function DynamicForm({ groupe, form, setForm }: { groupe: string, form: any, setForm: (form: any) => void }) {
+  const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white";
+  const labelCls = "text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5";
+
+  const champsSpecifiques = FICHES_PRELEVEMENT[groupe] || [];
+
+  const set = (k: string) => (e: any) => setForm({ ...form, [k]: e.target.value });
+
+  return (
+    <div className="space-y-4">
+      {/* Champs communs */}
+      <div className="grid grid-cols-2 gap-4">
+        <div><label className={labelCls}>Nom de famille</label><input value={form.nom} onChange={set("nom")} placeholder="KONÉ" className={inputCls} /></div>
+        <div><label className={labelCls}>Prénom(s)</label><input value={form.prenom} onChange={set("prenom")} placeholder="Amina Bintou" className={inputCls} /></div>
+      </div>
+      <div><label className={labelCls}>Date de naissance</label><input type="date" value={form.dateNaissance} onChange={set("dateNaissance")} className={inputCls} /></div>
+      
+      {/* Champs spécifiques au groupe */}
+      {champsSpecifiques.length > 0 && (
+        <div className="border-t border-gray-100 pt-4 mt-4 space-y-4">
+          {champsSpecifiques.map(champ => (
+            <div key={champ.label}>
+              <label className={labelCls}>{champ.label}</label>
+              <input type={champ.type || "text"} placeholder={champ.placeholder} className={inputCls} value={form[champ.key] || ""} onChange={set(champ.key)} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
+        <div><label className={labelCls}>Téléphone</label><input value={form.telephone} onChange={set("telephone")} placeholder="07 XX XX XX XX" className={inputCls} /></div>
+        <div><label className={labelCls}>Email (optionnel)</label><input type="email" value={form.email} onChange={set("email")} placeholder="vous@exemple.com" className={inputCls} /></div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PAGE PRINCIPALE ───
+function Citoyen() {
+  const [etape, setEtape] = useState(0);
+  const [docChoisi, setDocChoisi] = useState<DocType | null>(null); // Typage plus précis
+  const [mairie, setMairie] = useState("");
+  const [heberge, setHeberge] = useState(false);
+  const [paiement, setPaiement] = useState("wave");
+  const [recherche, setRecherche] = useState("");
+  const [form, setForm] = useState<any>({ nom: "", prenom: "", dateNaissance: "", telephone: "", email: "" });
+  const [fichiers, setFichiers] = useState<any>({ cni: null, domicile: null, hebergement: null });
+  const [reference] = useState(`KDC-2026-${String(Math.floor(Math.random() * 90000 + 10000))}`);
+
+    const setFichier = (k: string) => (e: any) => {
+    const f = e.target.files?.[0];
+    if (f) setFichiers({ ...fichiers, [k]: f.name });
+  };
+
+  const documentsFiltres = DOCUMENTS.filter(doc =>
+    doc.label.toLowerCase().includes(recherche.toLowerCase())
+  );
+
+  // Regroupe les documents filtrés par leur groupe
+  // En production, cette logique serait gérée côté backend ou par un store global
+  // pour éviter de re-calculer à chaque rendu.
+  
+  return (
+    <div className="min-h-screen bg-[#F0F2F5]">
+      {/* Header */}
+      <header className="bg-[#0A2540] text-white px-6 py-4 flex items-center gap-4 sticky top-0 z-50">
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+          <div className="w-8 h-8 bg-[#009A44] rounded-lg flex items-center justify-center font-black text-sm">K</div>
+          <span className="font-bold text-sm">KronoDoc CI</span>
         </Link>
-
-        <div className="mt-6 grid gap-10 lg:grid-cols-[1.1fr_1fr] lg:items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
-              <Smartphone className="h-3.5 w-3.5" />
-              Interface 1 · Grand public
-            </div>
-            <h1 className="mt-3 font-display text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl">
-              Votre acte, préparé
-              <br />
-              <span className="text-primary">depuis votre canapé.</span>
-            </h1>
-            <p className="mt-4 max-w-xl text-lg text-muted-foreground">
-              Le self-service qui remplace l'attente au guichet. Vous préparez
-              votre dossier depuis votre téléphone, vous payez, et vous ne venez
-              que pour retirer.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href="#demo"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
-              >
-                Voir la démo interactive
-                <ArrowRight className="h-4 w-4" />
-              </a>
-              <Link
-                to="/verifier"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-card px-6 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-              >
-                <QrCode className="h-4 w-4" />
-                Vérifier un document
-              </Link>
-            </div>
-            <ul className="mt-8 grid gap-2 sm:grid-cols-2">
-              {[
-                "Paiement Wave / Orange / MTN",
-                "Réception par email + WhatsApp",
-                "QR code d'authenticité",
-                "Historique de toutes vos démarches",
-              ].map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-foreground">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <PhoneMockup />
+        <ChevronRight size={14} className="text-white/30" />
+        <span className="text-sm text-white/70">Portail Citoyen</span>
+        <div className="ml-auto flex items-center gap-2">
+          <Phone size={14} className="text-white/50" />
+          <span className="text-xs text-white/50">Aide : 20 22 XX XX</span>
         </div>
-      </section>
+      </header>
 
-      {/* Demo interactive : 4 étapes */}
-      <section id="demo" className="bg-muted/40 py-16 lg:py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="max-w-2xl">
-            <div className="text-sm font-semibold uppercase tracking-wider text-primary">
-              Démo — Certificat de résidence
-            </div>
-            <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              4 écrans, 3 minutes, un document légal.
-            </h2>
+      <div className="max-w-2xl mx-auto px-4 py-10">
+        {/* Titre */}
+        {etape === 0 && (
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-extrabold text-[#0A2540] mb-2">Faire une demande de document</h1>
+            <p className="text-gray-500 text-sm">Remplissez votre dossier depuis chez vous. Venez juste signer au guichet.</p>
           </div>
+        )}
 
-          <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-            <ScreenCard
-              step="01"
-              title="Identité"
-              icon={<FileText className="h-5 w-5" />}
-              body={
-                <>
-                  <MiniField label="Nom" value="KOUASSI" />
-                  <MiniField label="Prénom" value="Aya Marie" />
-                  <MiniField label="Né(e) le" value="14 / 03 / 1998" />
-                  <MiniField label="Adresse" value="Rue J24, Cocody Angré" />
-                </>
-              }
-            />
-            <ScreenCard
-              step="02"
-              title="Pièces justificatives"
-              icon={<Upload className="h-5 w-5" />}
-              body={
-                <div className="space-y-2">
-                  <UploadRow label="CNI (recto / verso)" state="ok" />
-                  <UploadRow label="Facture CIE" state="ok" />
-                  <UploadRow label="Attestation d'hébergement" state="optional" />
-                </div>
-              }
-            />
-            <ScreenCard
-              step="03"
-              title="Paiement du timbre"
-              icon={<CreditCard className="h-5 w-5" />}
-              body={
-                <div className="space-y-2">
-                  <PaymentOption label="Wave" active />
-                  <PaymentOption label="Orange Money" />
-                  <PaymentOption label="MTN Money" />
-                  <div className="mt-3 flex items-center justify-between rounded-md bg-primary/10 px-3 py-2 text-sm">
-                    <span className="text-muted-foreground">Total</span>
-                    <span className="font-bold text-primary">1 500 FCFA</span>
-                  </div>
-                </div>
-              }
-            />
-            <ScreenCard
-              step="04"
-              title="Votre QR code"
-              icon={<QrCode className="h-5 w-5" />}
-              body={
-                <div className="flex flex-col items-center gap-2">
-                  <div className="grid h-24 w-24 place-items-center rounded-md bg-foreground">
-                    <QrCode className="h-16 w-16 text-background" />
-                  </div>
-                  <div className="text-center text-xs text-muted-foreground">
-                    Dossier <span className="font-mono text-foreground">KDC-2026-08421</span>
-                  </div>
-                  <div className="rounded-full bg-warning/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-warning-foreground">
-                    En attente
-                  </div>
-                </div>
-              }
-            />
-          </div>
-        </div>
-      </section>
+        <Progress etape={etape} />
 
-      {/* Cas particulier hébergement */}
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
-        <div className="grid gap-10 lg:grid-cols-[1fr_1.1fr] lg:items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-warning/30 bg-warning/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-warning-foreground">
-              <Home className="h-3.5 w-3.5" />
-              Cas particulier
-            </div>
-            <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Vous n'avez pas de facture à votre nom ?
-            </h2>
-            <p className="mt-4 text-muted-foreground">
-              C'est le cas le plus fréquent : locataire, jeune vivant chez ses
-              parents, hébergement chez un proche. Le portail vous accompagne
-              avec une <strong className="text-foreground">déclaration d'hébergement intégrée</strong>, signée
-              directement sur l'écran du téléphone — plus besoin de faire tamponner un papier.
-            </p>
-            <ol className="mt-6 space-y-3 text-sm">
-              {[
-                "Vous téléversez la CNI de la personne qui vous héberge.",
-                "L'attestation d'hébergement est pré-remplie automatiquement.",
-                "Vous et l'hébergeant signez tour à tour sur l'écran.",
-                "Le tout est ajouté à votre dossier — aucun déplacement en plus.",
-              ].map((s, i) => (
-                <li key={i} className="flex gap-3">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                    {i + 1}
-                  </span>
-                  <span className="text-foreground">{s}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
 
-          <div className="relative">
-            <div className="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-br from-warning/10 via-transparent to-primary/10 blur-2xl" />
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow-elevated)]">
-              <div className="flex items-center justify-between border-b border-border pb-3">
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                    Formulaire hébergement
-                  </div>
-                  <div className="font-display text-base font-semibold text-foreground">
-                    Attestation à signer
-                  </div>
-                </div>
-                <span className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning-foreground">
-                  À signer
-                </span>
+          {/* ── ÉTAPE 0 : Choix du document ── */}
+          {etape === 0 && (
+            <div>
+              <div className="mb-5">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Mairie concernée</label>
+                <select value={mairie} onChange={e => setMairie(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                  <option value="">Sélectionner votre mairie...</option>
+                  {MAIRIES.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
               </div>
-              <div className="mt-4 space-y-2 text-sm">
-                <MiniField label="Hébergeant" value="M. KOUASSI Jean" />
-                <MiniField label="Lien" value="Père du demandeur" />
-                <MiniField label="Adresse" value="Rue J24, Cocody Angré" />
-                <MiniField label="CNI hébergeant" value="✓ Téléversée" />
+              <div className="relative mb-4">
+                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Rechercher un document</label>
+                <Search size={16} className="absolute left-4 top-10 text-gray-400" />
+                <input
+                  type="text"
+                  value={recherche}
+                  onChange={e => setRecherche(e.target.value)}
+                  placeholder="Ex: résidence, naissance..."
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white pl-10"
+                />
               </div>
-              <div className="mt-5 rounded-lg border border-dashed border-border bg-muted/60 p-4">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Signature de l'hébergeant
-                </div>
-                <div className="mt-2 h-14 rounded-md border border-border bg-card">
-                  <svg viewBox="0 0 240 56" className="h-full w-full">
-                    <path
-                      d="M10 40 C 30 10, 50 50, 70 30 S 110 20, 140 35 S 200 15, 230 30"
-                      stroke="var(--ci-ink)"
-                      strokeWidth="2"
-                      fill="none"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </div>
+              <div className="space-y-4">
+                {GROUPES.map(groupe => {
+                  const docsDuGroupe = documentsFiltres.filter(d => d.groupe === groupe.code);
+                  if (docsDuGroupe.length === 0) return null; // N'affiche pas le groupe s'il n'y a pas de documents filtrés
+                  return (
+                    <div key={groupe.code}>
+                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{groupe.titre}</h3>
+                      <p className="text-xs text-gray-500 mb-3">{groupe.description}</p>
+                      {docsDuGroupe.map(doc => (
+                        <button key={doc.id} onClick={() => setDocChoisi(doc)} disabled={doc.disabled}
+                          className={`w-full text-left border-2 rounded-xl p-4 transition-all flex items-center justify-between mb-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-50
+                            ${docChoisi?.id === doc.id ? "border-[#009A44] bg-green-50" : "border-gray-100 hover:border-gray-200"}`}>
+                          <div>
+                            <div className="font-semibold text-sm text-[#0A2540]">{doc.label}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">{doc.disabled ? "Bientôt disponible" : `Délivré en ${doc.delai}`}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-[#009A44] text-sm">{doc.prix} FCFA</div>
+                            {docChoisi?.id === doc.id && <CheckCircle size={16} className="text-green-500 ml-auto mt-1" />}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
-              <button className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-primary text-sm font-semibold text-primary-foreground shadow-sm">
-                <Check className="h-4 w-4" /> Confirmer et joindre au dossier
+              <button onClick={() => setEtape(1)} disabled={!docChoisi || !mairie}
+                className="mt-6 w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
+                Continuer →
               </button>
             </div>
-          </div>
-        </div>
-      </section>
+          )}
 
-      {/* Après validation : réception */}
-      <section className="bg-foreground py-16 text-background lg:py-20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+          {/* ── ÉTAPE 1 : Informations personnelles ── */}
+          {etape === 1 && (
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.05] px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Après la signature
-              </div>
-              <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-                Le document arrive
-                <br />
-                sur votre téléphone.
-              </h2>
-              <p className="mt-4 max-w-lg text-background/70">
-                Dès que l'officier signe, vous recevez le PDF certifié
-                automatiquement — prêt à envoyer à votre banque, votre
-                employeur ou une ambassade.
-              </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <ChannelCard icon={<MessageCircle className="h-4 w-4" />} label="WhatsApp" />
-                <ChannelCard icon={<FileText className="h-4 w-4" />} label="Email PDF/A" />
-                <ChannelCard icon={<QrCode className="h-4 w-4" />} label="QR d'authenticité" />
-                <ChannelCard icon={<Wallet className="h-4 w-4" />} label="Reçu Mobile Money" />
+              <h2 className="text-lg font-bold text-[#0A2540] mb-1">Vos informations</h2>
+              <p className="text-xs text-gray-400 mb-5">Saisissez exactement vos informations telles qu'elles figurent sur votre CNI.</p>
+              
+              {/* Le formulaire dynamique est rendu ici */}
+              <DynamicForm groupe={docChoisi?.groupe || ""} form={form} setForm={setForm} />
+
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => setEtape(0)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
+                  <ArrowLeft size={14} /> Retour
+                </button>
+                <button onClick={() => setEtape(2)} disabled={!form.nom || !form.prenom || !form.dateNaissance}
+                  className="flex-1 py-3 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
+                  Continuer →
+                </button>
               </div>
             </div>
+          )}
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6">
-              <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-                <div className="grid h-8 w-8 place-items-center rounded-full bg-[#25D366]">
-                  <MessageCircle className="h-4 w-4 text-white" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold">Mairie de Cocody</div>
-                  <div className="text-[10px] text-background/60">via WhatsApp Business</div>
-                </div>
+          {/* ── ÉTAPE 2 : Pièces justificatives ── */}
+          {etape === 2 && (
+            <div>
+              <h2 className="text-lg font-bold text-[#0A2540] mb-1">Pièces justificatives</h2>
+              <p className="text-xs text-gray-400 mb-5">Photos nettes acceptées. L'agent vérifiera les originaux au guichet.</p>
+              <div className="space-y-4 mb-5">
+                <UploadZone label="Pièce d'identité (CNI, Passeport, Attestation)"
+                  hint="Photo recto/verso — JPG, PNG ou PDF" done={fichiers.cni} onFile={setFichier("cni")} />
+                <UploadZone label="Justificatif de domicile"
+                  hint="Facture CIE, SODECI, Orange, bail signé..." done={fichiers.domicile} onFile={setFichier("domicile")} />
               </div>
-              <div className="mt-4 space-y-3">
-                <ChatBubble>
-                  Bonjour Aya, votre certificat de résidence a été signé par M.
-                  le Maire. Voici votre document officiel. ✅
-                </ChatBubble>
-                <div className="ml-4 rounded-lg border border-white/10 bg-white/[0.05] p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-10 w-10 place-items-center rounded-md bg-primary/20 text-primary">
-                      <FileText className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold">
-                        certificat-residence-KDC-2026-08421.pdf
-                      </div>
-                      <div className="text-[10px] text-background/60">
-                        PDF/A · 218 Ko · QR d'authenticité inclus
-                      </div>
-                    </div>
+
+              {/* Cas hébergé */}
+              <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 mb-5">
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="text-sm font-semibold text-amber-800">Facture pas à votre nom ?</div>
+                    <div className="text-xs text-amber-700 mt-1">Si vous êtes hébergé(e) chez quelqu'un (famille, ami, propriétaire), cochez cette case pour ajouter une déclaration d'hébergement.</div>
+                    <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                      <input type="checkbox" checked={heberge} onChange={e => setHeberge(e.target.checked)} className="w-4 h-4 accent-amber-600" />
+                      <span className="text-xs font-semibold text-amber-800">Je suis hébergé(e)</span>
+                    </label>
                   </div>
                 </div>
-                <ChatBubble>
-                  Vous pouvez le vérifier à tout moment sur kronodoc.ci/verifier
-                </ChatBubble>
+              </div>
+
+              {heberge && (
+                <div className="space-y-4 mb-5 p-4 border border-gray-200 rounded-xl bg-gray-50">
+                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wide">Informations de l'hébergeant</div> {/* Ces champs devraient être connectés à l'état */}
+                  <input placeholder="Nom complet de l'hébergeant" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                  <input placeholder="N° CNI de l'hébergeant" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                  <UploadZone label="CNI de l'hébergeant" hint="Photo recto/verso" done={fichiers.hebergement} onFile={setFichier("hebergement")} />
+                  <div className="border-2 border-dashed border-amber-300 rounded-xl p-4 text-center bg-white">
+                    <div className="text-2xl mb-1">✍️</div>
+                    <div className="text-xs text-amber-700 font-medium">Attestation d'hébergement</div>
+                    <div className="text-xs text-gray-400 mt-1">L'hébergeant devra signer au guichet ou envoyer une photo de sa signature</div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button onClick={() => setEtape(1)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
+                  <ArrowLeft size={14} /> Retour
+                </button>
+                <button onClick={() => setEtape(3)} disabled={!fichiers.cni || !fichiers.domicile}
+                  className="flex-1 py-3 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
+                  Continuer →
+                </button>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
+          )}
 
-      <SiteFooter />
-    </div>
-  );
-}
+          {/* ── ÉTAPE 3 : Paiement ── */}
+          {etape === 3 && (
+            <div>
+              <h2 className="text-lg font-bold text-[#0A2540] mb-1">Paiement des droits</h2>
+              <p className="text-xs text-gray-400 mb-5">Le paiement sécurise votre dossier et génère votre QR code de passage au guichet.</p>
 
-/* ------------------------------ Sub-components ------------------------------ */
-
-function PhoneMockup() {
-  return (
-    <div className="relative mx-auto w-full max-w-[320px]">
-      <div className="absolute -inset-6 -z-10 rounded-[3rem] bg-gradient-to-br from-primary/15 via-transparent to-success/15 blur-2xl" />
-      <div className="rounded-[2.5rem] border-[10px] border-foreground bg-foreground p-1.5 shadow-[var(--shadow-elevated)]">
-        <div className="overflow-hidden rounded-[2rem] bg-background">
-          <div className="ci-flag-bar h-1 w-full" />
-          <div className="flex items-center justify-between px-5 pt-4 text-[10px] font-medium text-muted-foreground">
-            <span>9:41</span>
-            <span>KronoDoc CI</span>
-          </div>
-          <div className="px-5 py-4">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-              Nouvelle demande
-            </div>
-            <h3 className="mt-0.5 font-display text-lg font-bold text-foreground">
-              Certificat de résidence
-            </h3>
-            <div className="mt-4 space-y-2 rounded-lg border border-border bg-card p-3 text-xs">
-              <MiniField label="Nom" value="KOUASSI Aya" />
-              <MiniField label="Quartier" value="Cocody Angré" />
-              <MiniField label="Timbre" value="1 500 FCFA" />
-            </div>
-
-            <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/50 p-3">
-              <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-                <Camera className="h-3.5 w-3.5 text-primary" />
-                Prenez en photo votre CNI
+              {/* Récapitulatif */}
+              <div className="bg-[#F0F2F5] rounded-xl p-4 mb-5">
+                <div className="text-xs text-gray-500 mb-3 font-semibold uppercase tracking-wide">Récapitulatif de votre demande</div>
+                <div className="space-y-1.5">
+                  {[
+                    ["Document", docChoisi?.label],
+                    ["Mairie", mairie],
+                    ["Demandeur", `${form.nom} ${form.prenom}`],
+                    ["Téléphone", form.telephone || "—"],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex justify-between text-sm">
+                      <span className="text-gray-400">{k}</span>
+                      <span className="font-medium text-[#0A2540] text-right max-w-[200px]">{v}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-gray-200 mt-3 pt-3 flex justify-between items-center">
+                  <span className="text-sm text-gray-500">Taxe communale</span>
+                  <span className="text-xl font-extrabold text-[#009A44]">{docChoisi?.prix} FCFA</span>
+                </div>
               </div>
-              <div className="mt-2 grid h-16 place-items-center rounded-md bg-card/60 text-[10px] text-muted-foreground">
-                Aperçu de la caméra
+
+              {/* Modes de paiement */}
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Mode de paiement</div>
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                {[
+                  { id: "wave", label: "Wave", emoji: "🌊", color: "#1E3A5F" },
+                  { id: "orange", label: "Orange Money", emoji: "🟠", color: "#FF6600" },
+                  { id: "mtn", label: "MTN MoMo", emoji: "💛", color: "#FFCC00" },
+                  { id: "carte", label: "Carte bancaire", emoji: "💳", color: "#185FA5" },
+                ].map(opt => (
+                  <button key={opt.id} onClick={() => setPaiement(opt.id)}
+                    className={`border-2 rounded-xl p-3 text-center transition-all
+                      ${paiement === opt.id ? "border-[#009A44] bg-green-50" : "border-gray-100 hover:border-gray-200"}`}>
+                    <div className="text-2xl mb-1">{opt.emoji}</div>
+                    <div className="text-xs font-bold text-[#0A2540]">{opt.label}</div>
+                    {paiement === opt.id && <CheckCircle size={14} className="text-green-500 mx-auto mt-1" />}
+                  </button>
+                ))}
+              </div>
+
+              {/* Numéro de téléphone pour mobile money */}
+              {paiement !== "carte" && (
+                <div className="mb-5">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Numéro {paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : "MTN MoMo"}</label>
+                  <input defaultValue={form.telephone} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" placeholder="07 XX XX XX XX" />
+                  <p className="text-xs text-gray-400 mt-1.5">Vous recevrez une demande de paiement sur ce numéro</p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button onClick={() => setEtape(2)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
+                  <ArrowLeft size={14} /> Retour
+                </button>
+                <button onClick={() => setEtape(4)}
+                  className="flex-1 py-3 bg-[#F77F00] text-white font-bold rounded-xl hover:bg-orange-600 transition-colors text-sm">
+                  Payer {docChoisi?.prix} FCFA via {paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : paiement === "mtn" ? "MTN" : "Carte"} →
+                </button>
               </div>
             </div>
+          )}
 
-            <button className="mt-4 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-primary text-xs font-semibold text-primary-foreground">
-              Payer avec Wave
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-            <div className="mt-2 text-center text-[9px] text-muted-foreground">
-              Sécurisé par CinetPay · BCEAO
+          {/* ── ÉTAPE 4 : QR Code ── */}
+          {etape === 4 && (
+            <div className="text-center" data-statut="EN_ATTENTE_GUICHET"> {/* Statut pour le backend */}
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle size={32} className="text-green-600" />
+              </div>
+              <h2 className="text-xl font-extrabold text-[#0A2540] mb-1">Dossier enregistré !</h2>
+              <p className="text-sm text-gray-400 mb-6">Paiement confirmé · Présentez ce QR code au guichet</p>
+
+              <div className="flex justify-center mb-4">
+                <QRCodeDisplay reference={reference} />
+              </div> {/* En production, ce QR code serait généré par le backend */}
+              <div className="font-mono text-sm text-gray-500 mb-1">{reference}</div>
+              <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
+                ⏳ En attente validation au guichet
+              </div>
+
+              {/* Message important sur la vérification physique */}
+              <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 text-left mb-5">
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="text-sm font-semibold text-amber-800">Important : N'oubliez pas vos originaux !</div>
+                    <div className="text-xs text-amber-700 mt-1">Pour finaliser votre demande, l'agent au guichet devra comparer les documents originaux (CNI, justificatif de domicile, etc.) avec les copies que vous avez envoyées.</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Récapitulatif final */}
+              <div className="bg-[#F0F2F5] rounded-xl p-4 text-left mb-5">
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Votre dossier</div>
+                <div className="space-y-1.5">
+                  {[
+                    ["Document", docChoisi?.label],
+                    ["Mairie", mairie],
+                    ["Demandeur", `${form.nom} ${form.prenom}`],
+                    ["Paiement", `${paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : "MTN"} · ${docChoisi?.prix} FCFA ✅`],
+                    ["Délai estimé", docChoisi?.delai + " au guichet"],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex justify-between text-sm">
+                      <span className="text-gray-400">{k}</span>
+                      <span className="font-medium text-[#0A2540]">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-3">
+                <button
+                  onClick={() => {
+                    alert("Dossier annulé.\nEn production, le statut du dossier passerait à 'ANNULE_PAR_UTILISATEUR' (Soft Delete).");
+                    setEtape(0);
+                    setDocChoisi(null); // Réinitialise la sélection du document
+                  }}
+                  className="w-full py-2 border-2 border-red-100 text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-200 font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors">
+                  🗑️ Annuler ma demande
+                </button>
+                <button className="w-full py-3 bg-[#0A2540] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2 mt-4!">
+                  <QrCode size={16} /> Télécharger le QR Code {/* En production, ce bouton déclencherait un téléchargement réel */}
+                </button>
+                <button className="w-full py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+                  📲 Envoyer par WhatsApp
+                </button>
+                <button className="w-full py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+                  📧 Recevoir par email
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-400 mt-5">
+                Vous serez notifié par SMS au <strong>{form.telephone || "07 XX XX XX XX"}</strong> quand votre document sera prêt.
+              </p>
             </div>
-          </div>
+          )}
         </div>
-      </div>
-    </div>
-  );
-}
 
-function ScreenCard({
-  step,
-  title,
-  icon,
-  body,
-}: {
-  step: string;
-  title: string;
-  icon: React.ReactNode;
-  body: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col rounded-2xl border border-border bg-card shadow-[var(--shadow-institutional)]">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
-            {icon}
+        {/* Info bas de page */}
+        {etape < 4 && (
+          <div className="mt-4 flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl p-3"> {/* Cette section pourrait être un composant réutilisable */}
+            <AlertCircle size={14} className="text-blue-500 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-blue-700">
+              <strong>Vous n'avez pas de smartphone ?</strong> Rendez-vous dans un cybercafé partenaire ou directement au guichet d'accueil de votre mairie. Un agent vous assistera gratuitement.
+            </p>
           </div>
-          <div>
-            <div className="text-[10px] font-mono font-semibold tracking-wider text-primary">
-              {step}
-            </div>
-            <div className="font-display text-sm font-bold text-foreground">
-              {title}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-      <div className="p-4 text-xs">{body}</div>
-    </div>
-  );
-}
-
-function MiniField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-2 border-b border-border/60 pb-1.5 last:border-0 last:pb-0">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium text-foreground">{value}</span>
-    </div>
-  );
-}
-
-function UploadRow({ label, state }: { label: string; state: "ok" | "optional" }) {
-  return (
-    <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-3 py-2">
-      <div className="flex items-center gap-2">
-        <Upload className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-foreground">{label}</span>
-      </div>
-      {state === "ok" ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success">
-          <Check className="h-3 w-3" /> OK
-        </span>
-      ) : (
-        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-          Optionnel
-        </span>
-      )}
-    </div>
-  );
-}
-
-function PaymentOption({ label, active }: { label: string; active?: boolean }) {
-  return (
-    <div
-      className={`flex items-center justify-between rounded-md border px-3 py-2 ${
-        active ? "border-primary bg-primary/5" : "border-border bg-card"
-      }`}
-    >
-      <span className="text-foreground">{label}</span>
-      <span
-        className={`grid h-4 w-4 place-items-center rounded-full border ${
-          active ? "border-primary bg-primary" : "border-border"
-        }`}
-      >
-        {active && <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
-      </span>
-    </div>
-  );
-}
-
-function ChannelCard({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm">
-      <span className="grid h-7 w-7 place-items-center rounded-md bg-primary/20 text-primary">
-        {icon}
-      </span>
-      {label}
-    </div>
-  );
-}
-
-function ChatBubble({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white/[0.08] px-3 py-2 text-sm text-background">
-      {children}
     </div>
   );
 }

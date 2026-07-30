@@ -126,17 +126,17 @@ function QRCodeDisplay({ reference }: { reference: string }) {
 }
 
 // --- Définition des champs pour les fiches de prélèvement dynamiques ---
-const FICHES_PRELEVEMENT: Record<string, { label: string, placeholder: string, type?: string }[]> = {
+const FICHES_PRELEVEMENT: Record<string, { key: string, label: string, placeholder: string, type?: string }[]> = {
   "G1": [ // Adresse et résidence
-    { label: "Adresse complète concernée", placeholder: "Lot 47, Rue J24..." },
-    { label: "Quartier / Commune", placeholder: "Cocody Angré 7e tranche" },
-    { label: "Situation d'occupation", placeholder: "Propriétaire, locataire, hébergé(e)..." },
+    { key: "adresse", label: "Adresse complète concernée", placeholder: "Lot 47, Rue J24..." },
+    { key: "quartier", label: "Quartier / Commune", placeholder: "Cocody Angré 7e tranche" },
+    { key: "occupation", label: "Situation d'occupation", placeholder: "Propriétaire, locataire, hébergé(e)..." },
   ],
   "G4": [ // Extraits, copies et duplicatas
-    { label: "Numéro de l'acte (si connu)", placeholder: "Ex: 1234/2023" },
-    { label: "Année de l'acte (si connue)", placeholder: "Ex: 2023" },
-    { label: "Noms & Prénoms du père", placeholder: "KONAN Jean-Pierre" },
-    { label: "Noms & Prénoms de la mère", placeholder: "KOUAME Ahou" },
+    { key: "acteNumero", label: "Numéro de l'acte (si connu)", placeholder: "Ex: 1234/2023" },
+    { key: "acteAnnee", label: "Année de l'acte (si connue)", placeholder: "Ex: 2023" },
+    { key: "nomPere", label: "Noms & Prénoms du père", placeholder: "KONAN Jean-Pierre" },
+    { key: "nomMere", label: "Noms & Prénoms de la mère", placeholder: "KOUAME Ahou" },
   ],
   // Les autres groupes (G2, G3, G5, G6) auraient leurs propres champs ici.
 };
@@ -165,7 +165,7 @@ function DynamicForm({ groupe, form, setForm }: { groupe: string, form: any, set
           {champsSpecifiques.map(champ => (
             <div key={champ.label}>
               <label className={labelCls}>{champ.label}</label>
-              <input type={champ.type || "text"} placeholder={champ.placeholder} className={inputCls} />
+              <input type={champ.type || "text"} placeholder={champ.placeholder} className={inputCls} value={form[champ.key] || ""} onChange={set(champ.key)} />
             </div>
           ))}
         </div>
@@ -187,7 +187,7 @@ export default function Citoyen() {
   const [heberge, setHeberge] = useState(false);
   const [paiement, setPaiement] = useState("wave");
   const [recherche, setRecherche] = useState("");
-  const [form, setForm] = useState({ nom: "", prenom: "", dateNaissance: "", telephone: "", email: "" });
+  const [form, setForm] = useState<any>({ nom: "", prenom: "", dateNaissance: "", telephone: "", email: "" });
   const [fichiers, setFichiers] = useState<any>({ cni: null, domicile: null, hebergement: null });
   const [reference] = useState(`KDC-2026-${String(Math.floor(Math.random() * 90000 + 10000))}`);
 
@@ -300,7 +300,7 @@ export default function Citoyen() {
                 <button onClick={() => setEtape(0)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
                   <ArrowLeft size={14} /> Retour
                 </button>
-                <button onClick={() => setEtape(2)} disabled={!form.nom || !form.prenom}
+                <button onClick={() => setEtape(2)} disabled={!form.nom || !form.prenom || !form.dateNaissance}
                   className="flex-1 py-3 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
                   Continuer →
                 </button>
@@ -337,9 +337,9 @@ export default function Citoyen() {
 
               {heberge && (
                 <div className="space-y-4 mb-5 p-4 border border-gray-200 rounded-xl bg-gray-50">
-                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wide">Informations de l'hébergeant</div>
-                  <input placeholder="Nom complet de l'hébergeant" className={inputCls} />
-                  <input placeholder="N° CNI de l'hébergeant" className={inputCls} />
+                  <div className="text-xs font-bold text-gray-600 uppercase tracking-wide">Informations de l'hébergeant</div> {/* Ces champs devraient être connectés à l'état */}
+                  <input placeholder="Nom complet de l'hébergeant" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                  <input placeholder="N° CNI de l'hébergeant" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" />
                   <UploadZone label="CNI de l'hébergeant" hint="Photo recto/verso" done={fichiers.hebergement} onFile={setFichier("hebergement")} />
                   <div className="border-2 border-dashed border-amber-300 rounded-xl p-4 text-center bg-white">
                     <div className="text-2xl mb-1">✍️</div>
@@ -371,17 +371,17 @@ export default function Citoyen() {
               <div className="bg-[#F0F2F5] rounded-xl p-4 mb-5">
                 <div className="text-xs text-gray-500 mb-3 font-semibold uppercase tracking-wide">Récapitulatif de votre demande</div>
                 <div className="space-y-1.5">
-                  {[ // Utilisation de `filter(Boolean)` pour ne pas afficher les lignes avec des valeurs vides
+                  {[
                     ["Document", docChoisi?.label],
                     ["Mairie", mairie],
                     ["Demandeur", `${form.nom} ${form.prenom}`],
                     ["Téléphone", form.telephone || "—"],
-                  ].map(([k, v]) => (v ? (
+                  ].map(([k, v]) => (
                     <div key={k} className="flex justify-between text-sm">
                       <span className="text-gray-400">{k}</span>
                       <span className="font-medium text-[#0A2540] text-right max-w-[200px]">{v}</span>
                     </div>
-                  ) : null))}
+                  ))}
                 </div>
                 <div className="border-t border-gray-200 mt-3 pt-3 flex justify-between items-center">
                   <span className="text-sm text-gray-500">Taxe communale</span>
