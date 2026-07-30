@@ -295,11 +295,10 @@ function Citoyen() {
                             ${docChoisi?.id === doc.id ? "border-[#009A44] bg-green-50" : "border-gray-100 hover:border-gray-200"}`}>
                           <div>
                             <div className="font-semibold text-sm text-[#0A2540]">{doc.label}</div>
-                            <div className="text-xs text-gray-400 mt-0.5">{doc.disabled ? "Bientôt disponible" : `Délivré en ${doc.delai}`}</div>
+                            <div className="text-xs text-gray-400 mt-0.5">{doc.disabled ? "Bientôt disponible" : `Délai au guichet : ${doc.delai}`}</div>
                           </div>
                           <div className="text-right">
-                            <div className="font-bold text-[#009A44] text-sm">{doc.prix} FCFA</div>
-                            {docChoisi?.id === doc.id && <CheckCircle size={16} className="text-green-500 ml-auto mt-1" />}
+                            {docChoisi?.id === doc.id && <CheckCircle size={20} className="text-green-500 ml-auto" />}
                           </div>
                         </button>
                       ))}

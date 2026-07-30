@@ -36,6 +36,7 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const search = Route.useSearch();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -47,7 +48,7 @@ function AuthPage() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
+          options: { // Options pour la redirection et les métadonnées
             emailRedirectTo: `${window.location.origin}/mon-espace`,
             data: { first_name: firstName, last_name: lastName, phone },
           },
@@ -55,14 +56,14 @@ function AuthPage() {
         if (error) throw error;
         const { data } = await supabase.auth.getSession();
         if (data.session) {
-          navigate({ to: "/mon-espace", replace: true });
+          navigate({ to: search.redirect || "/mon-espace", replace: true });
           return;
         }
         setMessage("Compte créé. Vérifiez votre boîte mail pour confirmer votre adresse.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: "/mon-espace", replace: true });
+        navigate({ to: search.redirect || "/mon-espace", replace: true });
         return;
       }
     } catch (err) {
@@ -84,7 +85,7 @@ function AuthPage() {
       return;
     }
     if (result.redirected) return;
-    navigate({ to: "/mon-espace", replace: true });
+    navigate({ to: search.redirect || "/mon-espace", replace: true });
   }
 
   return (
