@@ -366,13 +366,17 @@ function ResultCard({ variant, refValue, documentData }: { variant: "valid" | "i
           <Row label="Mairie émettrice" value={doc.mairie} />
           <Row label="Signé par" value={doc.signe_par} />
           <Row label="Référence" value={doc.reference} />
-          {/* 
-            Cette section met en avant les éléments de sécurité numérique,
-            conformément à votre analyse sur le "timbre numérique".
-          */}
-          <div className="mt-3 flex flex-col gap-2 rounded-md bg-card p-3 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-success" />Sceau Électronique Visuel (SEV) vérifié.</div>
-            <div className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-success" />Filigrane numérique et micro-impressions conformes.</div>
+          
+          {/* --- Section "Timbre Numérique Infalsifiable" --- */}
+          <div className="!mt-4 rounded-md border border-border bg-card p-3">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5 text-success" />
+              Timbre Numérique Infalsifiable
+            </div>
+            <div className="mt-2 flex flex-col gap-1.5 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" />Sceau Électronique Visuel (SEV) conforme.</div>
+              <div className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-success" />Filigrane numérique de la mairie vérifié.</div>
+            </div>
           </div>
           <div className="mt-2 rounded-md bg-card p-3">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Empreinte numérique (SHA-256)</div>

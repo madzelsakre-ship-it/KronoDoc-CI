@@ -115,7 +115,7 @@ function OfficierPage() {
           <SecCard
             icon={<Fingerprint className="h-5 w-5" />}
             title="Authentification forte"
-            desc="Connexion par mot de passe + code SMS. Option biométrie sur mobile pour les usages fréquents."
+            desc="Connexion par mot de passe + code SMS. La signature finale est validée par biométrie (empreinte, Face ID) sur mobile."
           />
           <SecCard
             icon={<ShieldCheck className="h-5 w-5" />}

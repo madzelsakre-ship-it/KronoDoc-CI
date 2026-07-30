@@ -28,7 +28,6 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [role, setRole] = useState<"citoyen" | "agent">("citoyen");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -51,11 +50,8 @@ function AuthPage() {
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/citoyen`,
-            // On stocke le rôle demandé dans les métadonnées de l'utilisateur.
-            // Le rôle par défaut sera 'AGENT_PENDING' si agent, sinon 'CITOYEN'.
             data: {
-              first_name: firstName, last_name: lastName, phone,
-              role: role === 'agent' ? 'AGENT_PENDING' : 'CITOYEN'
+              first_name: firstName, last_name: lastName, phone, role: 'CITOYEN'
             },
           },
         });
@@ -146,11 +142,11 @@ function AuthPage() {
             <button
               type="button"
               onClick={handleGoogle}
-              disabled={loading}
+              disabled={true} // Désactivé pour éviter les erreurs 400
               className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-input bg-background text-sm font-semibold text-foreground transition-colors hover:bg-accent disabled:opacity-60"
             >
               <GoogleMark />
-              Continuer avec Google
+              Continuer avec Google (désactivé)
             </button>
 
             <div className="my-5 flex items-center gap-3">
@@ -160,29 +156,6 @@ function AuthPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-3">
-              {mode === "signup" && (
-                <div className="border-b border-border pb-4">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Vous êtes...</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => setRole('citoyen')}
-                      className={`flex items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold border-2 transition-colors ${role === 'citoyen' ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}>
-                      <User className="h-4 w-4" />
-                      Un citoyen
-                    </button>
-                    <button type="button" onClick={() => setRole('agent')}
-                      className={`flex items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold border-2 transition-colors ${role === 'agent' ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted'}`}>
-                      <Briefcase className="h-4 w-4" />
-                      Un agent de l'État
-                    </button>
-                  </div>
-                  {role === 'agent' && (
-                    <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
-                      Un justificatif professionnel (carte, arrêté de nomination) vous sera demandé après inscription pour valider votre compte agent.
-                    </div>
-                  )}
-                </div>
-              )}
-
               {mode === "signup" && (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -260,18 +233,16 @@ function AuthPage() {
           </div>
           
           {/* --- Bouton de test "passe-partout" --- */}
-          <div className="mt-4 text-center">
+          <div className="mt-6 border-t border-border pt-4 text-center">
+            <p className="text-xs text-muted-foreground mb-2">Pour tester l'application sans configuration :</p>
             <button
               onClick={handleTestLogin}
-              className="text-xs text-muted-foreground hover:text-primary transition-colors">
-              Connexion de test (passe-partout)
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-50 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-60"
+            >
+              Utiliser le compte de test "passe-partout"
             </button>
           </div>
 
-          <p className="mt-4 text-center text-xs text-muted-foreground">
-            Vos données sont hébergées de façon sécurisée et ne servent qu'au traitement de vos
-            démarches administratives.
-          </p>
         </div>
       </div>
     </main>
