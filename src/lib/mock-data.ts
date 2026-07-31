@@ -19,8 +19,11 @@ export type DocumentType =
   | "copie"
   | "declaration-deces"
   | "permis-inhumer"
-  | "certificat_nationalite" // From initial data
-  | "renouvellement_passeport"; // Nouveau document
+  | "certificat_nationalite"
+  | "renouvellement_passeport"
+  | "declaration_naissance"
+  | "dossier_mariage"
+  | "casier_judiciaire";
 
 export type DossierStatut = "en_attente" | "ocr_ok" | "valide" | "rejete" | "signature";
 

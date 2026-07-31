@@ -41,6 +41,11 @@ export const GROUPES: GroupType[] = [
     titre: "Groupe D : Titres d'Identité & Voyage",
     description: "Démarches liées aux documents d'identité nationaux (Passeport, CNI...).",
   },
+  {
+    code: "E",
+    titre: "Groupe E : Justice & Légal",
+    description: "Documents délivrés par les autorités judiciaires (Casier, Nationalité...).",
+  },
 ];
 
 // --- Référentiel des documents par groupe ---
@@ -60,6 +65,20 @@ export const DOCUMENTS: DocType[] = [
     groupe: "A",
     prix: 500,
     delai: "< 3 min",
+  },
+  {
+    id: "declaration_naissance",
+    label: "Déclaration de Naissance (Nouvel Acte)",
+    groupe: "A",
+    prix: 0,
+    delai: "Variable",
+  },
+  {
+    id: "dossier_mariage",
+    label: "Déclaration de Mariage (Dossier)",
+    groupe: "A",
+    prix: 10000, // Frais de dossier
+    delai: "Variable",
   },
   { id: "celibat", label: "Certificat de célibat", groupe: "A", prix: 1000, delai: "< 5 min" },
   {
@@ -114,5 +133,21 @@ export const DOCUMENTS: DocType[] = [
     groupe: "D",
     prix: 40000,
     delai: "3-4 semaines",
+  },
+
+  // --- Groupe E : Justice & Légal (Nouveau) ---
+  {
+    id: "casier_judiciaire",
+    label: "Casier Judiciaire (Bulletin n°3)",
+    groupe: "E",
+    prix: 2500,
+    delai: "2-3 jours",
+  },
+  {
+    id: "certificat_nationalite",
+    label: "Certificat de Nationalité",
+    groupe: "E",
+    prix: 5000,
+    delai: "Variable",
   },
 ];

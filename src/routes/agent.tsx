@@ -52,7 +52,7 @@ export const Route = createFileRoute("/agent")({
       });
     }
 
-    // Vérifie si l'utilisateur a le rôle "AGENT" ou "OFFICIER" (un officier peut voir la console agent)
+    // Vérifie si l'utilisateur a le rôle "AGENT" ou "OFFICIER"
     const userRole = session.user?.user_metadata?.role;
     if (userRole !== 'AGENT' && userRole !== 'OFFICIER') {
       // Si l'utilisateur n'a pas le bon rôle, on le redirige vers l'accueil.
@@ -346,7 +346,7 @@ function DossierMockup() {
                 Dossier #KD-2026-04128
               </div>
               <h3 className="mt-1 font-display text-2xl font-bold text-foreground">
-                Certificat de résidence
+                Renouvellement d'Extrait de naissance
               </h3>
               <div className="mt-1 text-sm text-muted-foreground">
                 Reçu il y a 38 s · Timbre payé (Wave)
@@ -369,8 +369,8 @@ function DossierMockup() {
               <Field label="Nom" value="KOUASSI" />
               <Field label="Prénom(s)" value="Adjoua Marie" />
               <Field label="Née le" value="12 mars 1991 · Bouaké" />
-              <Field label="Adresse déclarée" value="Riviera Golf, Îlot 12, Lot 47" />
-              <Field label="N° CNI" value="C009244781" />
+              <Field label="N° Acte Original" value="1991/BKE/1234" />
+              <Field label="Filiation" value="Père: K. Jean / Mère: A. Thérèse" />
             </div>
 
             {/* OCR + comparaison */}
@@ -378,28 +378,28 @@ function DossierMockup() {
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-success">
                   <ScanLine className="h-3.5 w-3.5" />
-                  Vérification des originaux (OCR)
+                  Vérification de l'acte original (OCR)
                 </div>
                 <span className="rounded-full bg-success px-2 py-0.5 text-[10px] font-bold text-success-foreground">
                   100 % concordance
                 </span>
               </div>
               <CheckItem
-                icon={<CreditCard className="h-3.5 w-3.5" />}
-                label="Pièce d'identité (Scan)"
-                detail="Nom, prénom et date de naissance correspondent."
+                icon={<FileCheck2 className="h-3.5 w-3.5" />}
+                label="Ancien Acte (Scan)"
+                detail="Numéro, Noms & filiation correspondent à la base de données."
                 ok
               />
               <CheckItem
-                icon={<Home className="h-3.5 w-3.5" />}
-                label="Justificatif de domicile (Scan)"
-                detail="Facture CIE. Adresse et nom du titulaire identiques."
+                icon={<CreditCard className="h-3.5 w-3.5" />}
+                label="Pièce d'identité (Scan)"
+                detail="Le nom du demandeur correspond à l'acte."
                 ok
               />
               <CheckItem
                 icon={<Banknote className="h-3.5 w-3.5" />}
-                label="Paiement du timbre"
-                detail="500 F CFA · Wave · Réf. WV8827K"
+                label="Paiement des frais"
+                detail="1 000 F CFA · Wave · Réf. WV8827K"
                 ok
               />
             </div>
@@ -414,14 +414,20 @@ function DossierMockup() {
               Originaux physiques présentés et conformes
             </label>
             <div className="flex flex-wrap items-center gap-2">
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
+              <button className="inline-flex items-center gap-1.5 rounded-md border border-destructive/20 bg-destructive/5 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10">
                 <XCircle className="h-4 w-4 text-destructive" />
                 Rejeter avec motif
               </button>
+              {/* Pour un renouvellement, l'agent approuve et génère directement, sans passer par l'officier */}
               <button className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90">
-                Valider et transmettre à l'officier
+                Approuver et Générer l'extrait
                 <ArrowRight className="h-4 w-4" />
               </button>
+              {/* Cas 2: Déclaration (Circuit Long) -> L'agent transmet à l'officier */}
+              {/* <button className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90">
+                Valider et Transmettre à l'Officier
+                <ArrowRight className="h-4 w-4" />
+              </button> */}
             </div>
           </div>
         </div>

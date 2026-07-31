@@ -61,7 +61,7 @@ function AuthPage() {
           navigate({ to: search.redirect || "/citoyen", replace: true }); // Redirige vers /citoyen ou la page demandée
           return;
         }
-        setMessage("Compte créé. Vérifiez votre boîte mail pour confirmer votre adresse.");
+        setMessage("Compte créé ! Pour gagner du temps sur vos prochaines demandes, pensez à compléter votre profil.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -91,23 +91,14 @@ function AuthPage() {
   }
 
   // --- Compte passe-partout pour le test ---
-  async function handleTestLogin() {
-    setError(null);
-    setMessage(null);
-    setLoading(true);
-    try {
-      // En production, ces identifiants seraient dans des variables d'environnement
-      const { error } = await supabase.auth.signInWithPassword({
-        email: "test@kronodoc.ci",
-        password: "password",
-      });
-      if (error) throw new Error("Le compte de test n'a pas pu se connecter. Vérifiez sa configuration dans Supabase.");
-      navigate({ to: search.redirect || "/citoyen", replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Une erreur est survenue.");
-    } finally {
-      setLoading(false);
-    }
+  function handleTestLogin() {
+    // Remplit les champs avec les identifiants de test
+    setEmail("test@kronodoc.ci");
+    setPassword("password");
+    // Simule un clic sur le bouton de soumission du formulaire
+    // pour utiliser la même logique de connexion que l'utilisateur.
+    const form = document.querySelector('form');
+    if (form) form.requestSubmit();
   }
 
   return (

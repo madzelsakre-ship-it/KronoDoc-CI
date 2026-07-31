@@ -13,10 +13,11 @@ import {
   Copy,
   Search,
 } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import jsPDF from "jspdf";
 import { SiteHeader } from "@/components/site-header"; // Assumed to exist
 import { SiteFooter } from "@/components/site-footer"; // Assumed to exist
-import { addDossierToQueue, type DocumentType } from "@/lib/mock-data";
+import { addDossierToQueue, type DocumentType, type Dossier } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/citoyen")({
   head: () => ({ // SEO and metadata
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/citoyen")({
   component: CitoyenPage,
 });
 
+import { DOCUMENTS, GROUPES } from "@/lib/document-config";
 
 // --- Types pour la structure des documents ---
 interface DocType {
@@ -47,41 +49,6 @@ interface GroupType {
   titre: string;
   description: string;
 }
-
-// --- NOUVELLE STRUCTURE : Groupes de documents ---
-// Mise à jour pour refléter la logique "Circuit Long" vs "Circuit Court"
-const GROUPES: GroupType[] = [
-  { code: "A", titre: "Groupe A : Documents à Instruction & Validation", description: "Actes nécessitant une étude de dossier par un agent (déclarations, certificats...)." },
-  { code: "B", titre: "Groupe B : Rééditions & Copies Certifiées (Paiement en ligne)", description: "Copies d'actes déjà existants dans les registres (extraits, légalisations...) avec paiement en ligne." },
-  { code: "C", titre: "Groupe C : Actes sensibles à Retrait Obligatoire", description: "Documents nécessitant une validation et un retrait physique exclusif en mairie." },
-  { code: "D", titre: "Groupe D : Titres d'Identité & Voyage", description: "Démarches liées aux documents d'identité nationaux (Passeport, CNI...)." },
-];
-
-// --- NOUVELLE STRUCTURE : Référentiel des documents par groupe ---
-// En production, ces données seraient chargées depuis une API (table `document_templates` versionnée par mairie)
-const DOCUMENTS: DocType[] = [
-  // --- Groupe A : Instruction & Validation (Circuit Long / avec supervision) ---
-  { id: "certificat_residence", label: "Certificat de résidence", groupe: "A", prix: 500, delai: "< 3 min" },
-  { id: "attestation_hebergement", label: "Attestation d'hébergement", groupe: "A", prix: 500, delai: "< 3 min" },
-  { id: "celibat", label: "Certificat de célibat", groupe: "A", prix: 1000, delai: "< 5 min" },
-  { id: "non-remariage", label: "Certificat de non-remariage", groupe: "A", prix: 1000, delai: "< 5 min" },
-  { id: "certificat_vie", label: "Certificat de vie", groupe: "A", prix: 500, delai: "< 3 min" },
-  { id: "indigence", label: "Certificat d'indigence", groupe: "A", prix: 0, delai: "< 5 min" },
-  { id: "legalisation", label: "Légalisation de signature", groupe: "A", prix: 500, delai: "< 3 min" }, // Exige la présence de l'agent
-
-  // --- Groupe B : Rééditions & Copies (Circuit Court / Simplifié) ---
-  { id: "extrait_naissance", label: "Extrait d'acte de naissance", groupe: "B", prix: 1000, delai: "< 5 min" },
-  { id: "mariage", label: "Extrait d'acte de mariage", groupe: "B", prix: 2000, delai: "< 5 min" },
-  { id: "deces", label: "Extrait d'acte de décès", groupe: "B", prix: 1000, delai: "< 5 min" },
-  { id: "copie", label: "Certification de copie conforme", groupe: "B", prix: 500, delai: "< 3 min" },
-
-  // --- Groupe C : Actes sensibles (Circuit Long / avec supervision, Retrait Obligatoire) ---
-  { id: "declaration-deces", label: "Déclaration de décès", groupe: "C", prix: 0, delai: "Variable" },
-  { id: "permis-inhumer", label: "Permis d'inhumer", groupe: "C", prix: 5000, delai: "Variable" },
-
-  // --- Groupe D : Titres d'Identité (Nouveau) ---
-  { id: "renouvellement_passeport", label: "Renouvellement de Passeport", groupe: "D", prix: 40000, delai: "3-4 semaines" },
-];
 
 const MAIRIES = [
   "Mairie de Cocody", "Mairie de Yopougon", "Mairie de Abobo",
@@ -161,21 +128,31 @@ function QRCodeDisplay({ reference }: { reference: string }) {
 // --- Définition des champs pour les fiches de prélèvement dynamiques ---
 const FICHES_PRELEVEMENT: Record<string, { key: string, label: string, placeholder: string, type?: string }[]> = {
   "A": [ // Champs communs pour les documents à instruction
-    { key: "adresse", label: "Adresse complète concernée", placeholder: "Lot 47, Rue J24..." },
     { key: "quartier", label: "Quartier / Commune", placeholder: "Cocody Angré 7e tranche" },
-    { key: "occupation", label: "Situation d'occupation", placeholder: "Propriétaire, locataire, hébergé(e)..." },
   ],
-  "B": [ // Champs communs pour les rééditions
-    { key: "acteNumero", label: "Numéro de l'acte original", placeholder: "Ex: 1234/2023" },
-    { key: "acteAnnee", label: "Année de l'acte (si connue)", placeholder: "Ex: 2023" },
-    { key: "nomPere", label: "Noms & Prénoms du père", placeholder: "KONAN Jean-Pierre" },
-    { key: "nomMere", label: "Noms & Prénoms de la mère", placeholder: "KOUAME Ahou" },
+  "B": [ // Champs ultra-courts pour les renouvellements
+    { key: "acteNumero", label: "Numéro de l'acte original (si connu)", placeholder: "Ex: 1234/2023" },
+    { key: "acteAnnee", label: "Année du registre (si connue)", placeholder: "Ex: 2023" },
+  ],
+  "declaration_naissance": [
+    { key: "enfantNom", label: "Nom de l'enfant", placeholder: "KONAN" },
+    { key: "enfantPrenoms", label: "Prénom(s) de l'enfant", placeholder: "Aya Victoire" },
+    { key: "enfantSexe", label: "Sexe de l'enfant", placeholder: "M / F" },
+    { key: "enfantLieuNaissance", label: "Lieu de naissance (Maternité)", placeholder: "CHU de Cocody" },
+    { key: "pereNom", label: "Nom & Prénom(s) du Père", placeholder: "KONAN Jean-Pierre" },
+    { key: "pereProfession", label: "Profession du Père", placeholder: "Ingénieur" },
+    { key: "mereNom", label: "Nom & Prénom(s) de la Mère", placeholder: "KOUAME Ahou" },
+    { key: "mereProfession", label: "Profession de la Mère", placeholder: "Commerçante" },
   ],
   "D": [ // Champs pour le renouvellement de passeport
     { key: "ancienPasseportNum", label: "Numéro de l'ancien passeport", placeholder: "Ex: 19BI12345" },
     { key: "dateExpirationAncien", label: "Date d'expiration de l'ancien passeport", placeholder: "", type: "date" },
   ],
-  // Les autres groupes (G2, G3, G5, G6) auraient leurs propres champs ici.
+  "E": [ // Champs pour les documents de justice
+    { key: "tribunalCompetent", label: "Tribunal compétent", placeholder: "Tribunal de Première Instance d'Abidjan" },
+    { key: "nomPere", label: "Noms & Prénoms du père", placeholder: "KONAN Jean-Pierre" },
+    { key: "nomMere", label: "Noms & Prénoms de la mère", placeholder: "KOUAME Ahou" },
+  ],
 };
 
 // --- Interfaces pour un typage plus strict des états ---
@@ -197,6 +174,10 @@ interface FichiersData { // Typage des fichiers uploadés
   recuPaiement: string | null;
   declarationPerte: string | null;
   autorisationParentale: string | null;
+  certificatMedical: string | null;
+  livretFamille: string | null;
+  jugementDivorce: string | null;
+  acteOrigine: string | null;
 }
 
 
@@ -206,7 +187,7 @@ function DynamicForm({ groupe, form, setForm }: { groupe: string, form: FormData
   const labelCls = "text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5";
 
   const champsSpecifiques = FICHES_PRELEVEMENT[groupe] || [];
-
+  
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
 
   return (
@@ -329,6 +310,10 @@ function CitoyenPage() {
     recuPaiement: null,
     declarationPerte: null,
     autorisationParentale: null,
+    certificatMedical: null,
+    livretFamille: null,
+    jugementDivorce: null,
+    acteOrigine: null,
   });
   const [reference] = useState(`KDC-2026-${String(Math.floor(Math.random() * 90000 + 10000))}`);
 
@@ -522,6 +507,35 @@ function Etape2_PiecesJustificatives({ setEtape, docChoisi, form, reference, eta
     <div>
       <h2 className="text-lg font-bold text-[#0A2540] mb-1">Pièces justificatives</h2>
       <p className="text-xs text-gray-400 mb-5">Photos nettes acceptées. L'agent vérifiera les originaux au guichet.</p>
+
+      {/* Pour les renouvellements (Groupe B), on demande l'ancien acte ici */}
+      {docChoisi?.groupe === 'B' && (
+        <div className="space-y-4 mb-5 p-4 border border-primary/20 rounded-xl bg-primary/5">
+          <div className="text-sm font-semibold text-primary">Informations de l'ancien document</div>
+          <UploadZone label="Ancien extrait d'acte" hint="Photo ou scan du document à renouveler" done={fichiers.cni} onFile={setFichier("cni")} />
+          <div>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Numéro de l'acte original (si lisible)</label>
+            <input placeholder="Ex: 1234/2023" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white" />
+          </div>
+        </div>
+      )}
+
+      {/* Pièces pour la déclaration de naissance */}
+      {docChoisi?.id === 'declaration_naissance' && (
+        <div className="space-y-4 mb-5">
+          <UploadZone label="Certificat de Déclaration de Naissance" hint="Délivré par la maternité" done={fichiers.certificatMedical} onFile={setFichier("certificatMedical")} />
+          <UploadZone label="Pièce d'identité du Père" hint="CNI, Passeport ou Attestation" done={fichiers.cni} onFile={setFichier("cni")} />
+          <UploadZone label="Pièce d'identité de la Mère" hint="CNI, Passeport ou Attestation" done={fichiers.domicile} onFile={setFichier("domicile")} />
+          <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" className="h-4 w-4 accent-amber-600" />
+              <span className="text-sm font-semibold text-amber-800">Parents mariés ?</span>
+            </label>
+            <div className="mt-3 pl-7"><UploadZone label="Livret de famille ou Acte de mariage" hint="Si applicable" done={fichiers.livretFamille} onFile={setFichier("livretFamille")} /></div>
+          </div>
+        </div>
+      )}
+
       
       {/* --- Logique d'affichage conditionnelle pour les pièces --- */}
       {docChoisi?.id === 'renouvellement_passeport' ? (
