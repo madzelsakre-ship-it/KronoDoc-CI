@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { ShieldCheck, Loader2, Mail, Lock, User } from "lucide-react";
+import { ShieldCheck, Loader2, Mail, Lock, User, BriefcaseBusiness, BadgeCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
+import { ROLE_OPTIONS, getRoleHomePath, enableOwnerMode, type AppRole } from "@/lib/role-guard";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -33,6 +34,7 @@ function AuthPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  const [role, setRole] = useState<AppRole>("CITOYEN");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,23 +51,31 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/citoyen`,
+            emailRedirectTo: `${window.location.origin}${getRoleHomePath(role)}`,
             data: {
-              first_name: firstName, last_name: lastName, phone, role: 'CITOYEN'
+              first_name: firstName,
+              last_name: lastName,
+              phone,
+              role,
             },
           },
         });
         if (error) throw error;
         const { data } = await supabase.auth.getSession();
-        if (data.session) { // Si la session est établie, redirige
-          navigate({ to: search.redirect || "/citoyen", replace: true }); // Redirige vers /citoyen ou la page demandée
+        if (data.session) {
+          const nextRoute = search.redirect || getRoleHomePath(role);
+          navigate({ to: nextRoute, replace: true });
           return;
         }
-        setMessage("Compte créé ! Pour gagner du temps sur vos prochaines demandes, pensez à compléter votre profil.");
+        setMessage("Compte créé ! Votre profil a bien été enregistré avec le rôle sélectionné.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        navigate({ to: search.redirect || "/citoyen", replace: true }); // Redirige vers /citoyen ou la page demandée
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const nextRole = sessionData.session?.user?.user_metadata?.role ?? "CITOYEN";
+        const nextRoute = search.redirect || getRoleHomePath(nextRole as AppRole);
+        navigate({ to: nextRoute, replace: true });
         return;
       }
     } catch (err) {
@@ -122,22 +132,57 @@ function AuthPage() {
 
           <div className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow-institutional)]">
             <h1 className="font-display text-xl font-bold text-foreground">
-              {mode === "signin" ? "Connexion à votre espace" : "Créer votre compte citoyen"}
+              {mode === "signin" ? "Connexion à votre espace" : "Créer votre compte"}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {mode === "signin"
                 ? "Suivez vos demandes et récupérez vos documents signés."
-                : "Une seule saisie : vos informations sont réutilisées pour chaque demande."}
+                : "Choisissez votre rôle pour accéder au bon espace et verrouiller les bons écrans."}
             </p>
+
+            {mode === "signup" && (
+              <div className="mt-5 space-y-2">
+                {ROLE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setRole(option.value)}
+                    className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-all ${
+                      role === option.value
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                        : "border-border bg-background hover:border-primary/30"
+                    }`}
+                  >
+                    <div className="mt-0.5 rounded-md bg-muted p-2 text-primary">
+                      {option.value === "CITOYEN" ? <User className="h-4 w-4" /> : option.value === "AGENT" ? <BriefcaseBusiness className="h-4 w-4" /> : <BadgeCheck className="h-4 w-4" />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">{option.label}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{option.helper}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             <button
               type="button"
               onClick={handleGoogle}
-              disabled={true} // Désactivé pour éviter les erreurs 400
               className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-input bg-background text-sm font-semibold text-foreground transition-colors hover:bg-accent disabled:opacity-60"
             >
               <GoogleMark />
-              Continuer avec Google (désactivé)
+              Continuer avec Google
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                enableOwnerMode();
+                setMessage("Accès propriétaire activé pour ce navigateur. L’override reste réservé au propriétaire de l’application.");
+              }}
+              className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-lg border border-amber-200 bg-amber-50 text-xs font-semibold uppercase tracking-[0.12em] text-amber-700"
+            >
+              Mode propriétaire
             </button>
 
             <div className="my-5 flex items-center gap-3">

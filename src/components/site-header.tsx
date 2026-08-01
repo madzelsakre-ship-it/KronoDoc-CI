@@ -6,7 +6,7 @@ export function SiteHeader() {
   const { user, loading } = useSession();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
       <div className="ci-flag-bar h-1 w-full" />
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link to="/" className="flex items-center gap-2.5">

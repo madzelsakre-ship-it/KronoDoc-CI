@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
-import { getQueue, Dossier } from "@/lib/mock-data";
+import { getQueue, Dossier, recognizeDocument } from "@/lib/mock-data";
 import { SiteFooter } from "@/components/site-footer";
+import { isRoleBypassEnabled } from "@/lib/role-guard";
 
 export const Route = createFileRoute("/agent")({
   head: () => ({
@@ -41,22 +42,22 @@ export const Route = createFileRoute("/agent")({
   // Ce bloc s'exécute avant que la page ne soit rendue.
   beforeLoad: async ({ location }) => {
     const { data: { session } } = await supabase.auth.getSession();
-    // Si l'utilisateur n'est pas connecté, on le redirige vers la page de connexion.
     if (!session) {
       throw redirect({
         to: "/auth",
         search: {
-          // Après connexion, il sera redirigé vers la page qu'il tentait d'accéder.
           redirect: location.href,
         },
       });
     }
 
-    // Vérifie si l'utilisateur a le rôle "AGENT" ou "OFFICIER"
+    if (isRoleBypassEnabled()) {
+      return;
+    }
+
     const userRole = session.user?.user_metadata?.role;
-    if (userRole !== 'AGENT' && userRole !== 'OFFICIER') {
-      // Si l'utilisateur n'a pas le bon rôle, on le redirige vers l'accueil.
-      throw redirect({ to: '/' });
+    if (userRole !== "AGENT" && userRole !== "OFFICIER") {
+      throw redirect({ to: "/citoyen" });
     }
   },
   component: AgentPage,
@@ -259,7 +260,7 @@ function QueuePreview({ onRefresh }: { onRefresh: () => void }) {
               </div>
               <div>
                 <div className="text-sm font-semibold text-foreground">{it.nom}</div>
-                <div className="text-xs text-muted-foreground">{it.doc}</div>
+                <div className="text-xs text-muted-foreground">{recognizeDocument(it.doc).label}</div>
               </div>
             </div>
             <StatusPill status={it.statut} color={it.color} textColor={it.textColor} />
@@ -371,6 +372,8 @@ function DossierMockup() {
               <Field label="Née le" value="12 mars 1991 · Bouaké" />
               <Field label="N° Acte Original" value="1991/BKE/1234" />
               <Field label="Filiation" value="Père: K. Jean / Mère: A. Thérèse" />
+              <Field label="Type de document" value={recognizeDocument("extrait_naissance").label} />
+              <Field label="Conformité" value={recognizeDocument("extrait_naissance").status === "reconnu" ? "Document reconnu et conforme" : "Vérification humaine requise"} />
             </div>
 
             {/* OCR + comparaison */}
@@ -387,13 +390,13 @@ function DossierMockup() {
               <CheckItem
                 icon={<FileCheck2 className="h-3.5 w-3.5" />}
                 label="Ancien Acte (Scan)"
-                detail="Numéro, Noms & filiation correspondent à la base de données."
+                detail={`Document reconnu : ${recognizeDocument("extrait_naissance").requiredDocuments.join(" / ")}`}
                 ok
               />
               <CheckItem
                 icon={<CreditCard className="h-3.5 w-3.5" />}
                 label="Pièce d'identité (Scan)"
-                detail="Le nom du demandeur correspond à l'acte."
+                detail="Le nom du demandeur correspond à l'acte et au profil enregistré."
                 ok
               />
               <CheckItem

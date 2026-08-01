@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import React, { useState, useMemo, useEffect } from "react";
 import {
   ArrowLeft,
@@ -12,16 +12,19 @@ import {
   Phone,
   Copy,
   Search,
+  Camera,
 } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { ShieldCheck } from "lucide-react";
-import { SiteHeader } from "@/components/site-header"; // Assumed to exist
-import { SiteFooter } from "@/components/site-footer"; // Assumed to exist
-import { addDossierToQueue, type DocumentType, type Dossier } from "@/lib/mock-data";
-import { CATEGORIES, SOUS_CATEGORIES, DOCUMENTS, type DocType, type DeliveryOption, type DeliveryFormat, type FormFieldConfig, type JustificatifConfig } from "@/lib/document-config";
+import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
 import { useSession } from "@/hooks/use-session";
+import { supabase } from "@/integrations/supabase/client";
+import { isDevTestModeEnabled, setDevTestMode } from "@/lib/test-mode";
+import { canAccessRoute, getUserRole } from "@/lib/role-guard";
 
 export const Route = createFileRoute("/citoyen")({
-  head: () => ({ // SEO and metadata
+  head: () => ({
     meta: [
       { title: "Portail Citoyen — KronoDoc CI" },
       {
@@ -30,46 +33,346 @@ export const Route = createFileRoute("/citoyen")({
       },
     ],
   }),
+  beforeLoad: async ({ location }) => {
+    const { data } = await supabase.auth.getSession();
+    const role = getUserRole(data.session?.user ?? null);
+
+    if (!data.session) {
+      throw redirect({
+        to: "/auth",
+        search: { redirect: location.href },
+      });
+    }
+
+    if (!canAccessRoute(role, "/citoyen")) {
+      throw redirect({ to: "/agent" });
+    }
+  },
   component: CitoyenPage,
 });
 
-const MAIRIES = [
-  "Mairie de Cocody", "Mairie de Yopougon", "Mairie de Abobo",
-  "Mairie de Adjamé", "Mairie de Plateau", "Mairie de Treichville",
-  "Mairie de Marcory", "Mairie de Koumassi", "Mairie de Port-Bouët",
-];
+// ====================================================================================
+// 1. BASE DE DONNÉES (SERVICES_DATA)
+// ====================================================================================
+const SERVICES_DATA = {
+  mairie: {
+    title: "Mairie & État civil",
+    icon: "🏛️",
+    description: "Demandes relatives à la naissance, résidence, mariage et documents officiels.",
+    entityLabel: "MAIRIE CONCERNÉE",
+    entityPlaceholder: "Sélectionner votre mairie...",
+    entities: ["Mairie de Yopougon", "Mairie d'Abobo", "Mairie de Cocody", "Mairie de Treichville", "Mairie de Marcory"],
+    sections: [
+      {
+        title: "TYPE A — DÉLIVRANCE RAPIDE / AUTOMATIQUE",
+        items: [
+          { id: "birth_extract", name: "Extrait d'acte de naissance", time: "< 5 min", price: "1000 FCFA" },
+          { id: "marriage_extract", name: "Extrait d'acte de mariage", time: "< 5 min", price: "2000 FCFA" },
+        ],
+      },
+      {
+        title: "TYPE B — SUPERVISION OFFICIER / DOCUMENTS LOURDS",
+        items: [
+          { id: "birth_declaration", name: "Déclaration de naissance d'un enfant", time: "1-2 jours", price: "2000 FCFA" },
+          { id: "residence_certificate", name: "Certificat de résidence", time: "< 3 min", price: "500 FCFA" },
+          { id: "full_birth_copy", name: "Copie intégrale d'acte de naissance", time: "1-2 jours", price: "1500 FCFA" },
+          { id: "document_legalisation", name: "Légalisation de document", time: "2-3 jours", price: "1500 FCFA" },
+          { id: "death_extract", name: "Extrait d'acte de décès", time: "< 5 min", price: "1000 FCFA" },
+        ],
+      },
+    ],
+  },
+  identite: {
+    title: "Identité, CNI & Passeport",
+    icon: "🪪",
+    description: "CNI, passeport, certificat de nationalité...",
+    entityLabel: "CENTRE D'ENRÔLEMENT CONCERNÉ",
+    entityPlaceholder: "Sélectionner votre centre...",
+    entities: ["Centre ONI Plateau", "Commissariat 16ème Yopougon", "Commissariat 22ème Cocody"],
+    sections: [
+      {
+        title: "TYPE C — MODÈLE SOUVERAIN / ECITIZEN",
+        items: [
+          { id: "cni_first", name: "Première demande CNI", time: "7-14 jours", price: "5000 FCFA" },
+          { id: "cni_renew", name: "Renouvellement CNI", time: "5-7 jours", price: "5000 FCFA" },
+          { id: "passport", name: "Passeport biométrique", time: "7-10 jours", price: "40000 FCFA" },
+          { id: "attestation_id", name: "Attestation d'identité", time: "< 10 min", price: "2000 FCFA" },
+          { id: "nationality", name: "Certificat de nationalité", time: "2-3 jours", price: "2500 FCFA" },
+        ],
+      },
+    ],
+  },
+  transport: {
+    title: "Transport & Permis",
+    icon: "🚗",
+    description: "Permis de conduire, carte grise...",
+    entityLabel: "CENTRE DES TRANSPORTS CONCERNÉ",
+    entityPlaceholder: "Sélectionner la direction/guichet...",
+    entities: ["Guichet Unique Automobile Abidjan", "Direction Régionale des Transports"],
+    sections: [
+      {
+        title: "PERMIS DE CONDUIRE & CARTE GRISE",
+        items: [
+          { id: "permit_renew", name: "Renouvellement du permis de conduire", time: "2-3 jours", price: "10000 FCFA" },
+          { id: "permit_duplicata", name: "Duplicata du permis de conduire", time: "24h", price: "15000 FCFA" },
+          { id: "permit_inter", name: "Permis international", time: "3-5 jours", price: "25000 FCFA" },
+          { id: "grey_card", name: "Mutation de carte grise", time: "2-4 jours", price: "20000 FCFA" },
+        ],
+      },
+    ],
+  },
+  justice: {
+    title: "Justice & Casier Judiciaire",
+    icon: "⚖️",
+    description: "Demande de casier judiciaire...",
+    entityLabel: "TRIBUNAL CONCERNÉ",
+    entityPlaceholder: "Sélectionner le tribunal...",
+    entities: ["Tribunal de Première Instance d'Abidjan", "Tribunal de Yopougon"],
+    sections: [
+      {
+        title: "ACTES DE JUSTICE",
+        items: [
+          { id: "casier", name: "Extrait de casier judiciaire (Bulletin N°3)", time: "24-48h", price: "2500 FCFA" },
+        ],
+      },
+    ],
+  },
+  legalisation: {
+    title: "Légalisation de Documents",
+    icon: "📜",
+    description: "Faites certifier vos documents personnels (diplômes, contrats...).",
+    entityLabel: "MAIRIE POUR LA LÉGALISATION",
+    entityPlaceholder: "Sélectionner la mairie...",
+    entities: ["Mairie de Yopougon", "Mairie d'Abobo", "Mairie de Cocody"],
+    sections: [],
+  },
+};
 
-// ─── Composant Progress ───
-function Progress({ etape, etapes, currentDoc }: { etape: number; etapes: string[]; currentDoc: DocType | null }) {
+const DOCUMENT_FORM_CONFIG: Record<string, {
+  title: string;
+  intro: string;
+  fields: Array<{ key: string; label: string; type?: "text" | "date" | "textarea"; placeholder?: string; required?: boolean }>; 
+  attachments: Array<{ label: string; required: boolean; accept: string }>; 
+  note?: string;
+}> = {
+  birth_extract: {
+    title: "Demande d'extrait d'acte de naissance",
+    intro: "Fiche de demande simple et rapide. Votre document sera traité automatiquement après validation des pièces.",
+    fields: [
+      { key: "nom", label: "Nom", type: "text", placeholder: "Nom du demandeur" },
+      { key: "prenom", label: "Prénom(s)", type: "text", placeholder: "Prénoms" },
+      { key: "date_naissance", label: "Date de naissance", type: "date" },
+      { key: "lieu_naissance", label: "Lieu de naissance", type: "text", placeholder: "Ville / commune" },
+      { key: "registre_numero", label: "Numéro du registre d'acte", type: "text", placeholder: "Optionnel" },
+      { key: "registre_annee", label: "Année du registre", type: "text", placeholder: "Optionnel" },
+    ],
+    attachments: [
+      { label: "Copie / photo de la CNI", required: true, accept: "image/*,.pdf" },
+      { label: "Photo de l'ancien extrait d'acte de naissance", required: false, accept: "image/*,.pdf" },
+    ],
+  },
+  marriage_extract: {
+    title: "Demande d'extrait d'acte de mariage",
+    intro: "Renseignez les informations du couple pour traiter votre demande.",
+    fields: [
+      { key: "nom_epoux", label: "Nom et prénom(s) de l'époux", type: "text", placeholder: "Nom complet" },
+      { key: "nom_epouse", label: "Nom et prénom(s) de l'épouse", type: "text", placeholder: "Nom complet" },
+      { key: "date_mariage", label: "Date du mariage", type: "date" },
+      { key: "registre_mariage", label: "Numéro du registre de mariage", type: "text", placeholder: "Optionnel" },
+    ],
+    attachments: [
+      { label: "CNI du demandeur", required: true, accept: "image/*,.pdf" },
+      { label: "Photo du livret de famille ou ancien extrait", required: false, accept: "image/*,.pdf" },
+    ],
+  },
+  birth_declaration: {
+    title: "Déclaration de naissance d'un enfant",
+    intro: "Votre déclaration sera transmise à l'Officier d'État Civil pour vérification du registre et validation de l'acte.",
+    fields: [
+      { key: "enfant_prenoms", label: "Prénom(s) de l'enfant", type: "text", placeholder: "Prénoms" },
+      { key: "enfant_sexe", label: "Sexe", type: "text", placeholder: "Masculin / Féminin" },
+      { key: "enfant_date_heure", label: "Date et heure exacte de la naissance", type: "text", placeholder: "Ex: 12/04/2026 à 21h40" },
+      { key: "enfant_lieu", label: "Lieu de naissance", type: "text", placeholder: "Hôpital / maternité / commune" },
+      { key: "pere_nom", label: "Nom et prénom(s) du père", type: "text", placeholder: "Nom complet" },
+      { key: "pere_profession", label: "Profession du père", type: "text", placeholder: "Profession" },
+      { key: "pere_domicile", label: "Domicile / résidence du père", type: "text", placeholder: "Quartier / commune" },
+      { key: "pere_cni", label: "Numéro de CNI / pièce d'identité du père", type: "text", placeholder: "Numéro" },
+      { key: "mere_nom", label: "Nom et prénom(s) de la mère", type: "text", placeholder: "Nom complet" },
+      { key: "mere_profession", label: "Profession de la mère", type: "text", placeholder: "Profession" },
+      { key: "mere_domicile", label: "Domicile / résidence de la mère", type: "text", placeholder: "Quartier / commune" },
+      { key: "mere_cni", label: "Numéro de CNI / pièce d'identité de la mère", type: "text", placeholder: "Numéro" },
+      { key: "statut_matrimonial", label: "Statut matrimonial", type: "text", placeholder: "Mariés / Célibataires" },
+    ],
+    attachments: [
+      { label: "Certificat de déclaration de naissance / certificat d'accouchement", required: true, accept: "image/*,.pdf" },
+      { label: "CNI / pièce d'identité du père ou de la mère", required: true, accept: "image/*,.pdf" },
+      { label: "Livret de famille ou acte de mariage", required: false, accept: "image/*,.pdf" },
+    ],
+    note: "ℹ️ Note : Votre déclaration sera transmise à l'Officier d'État Civil pour vérification du registre et validation de l'acte.",
+  },
+  residence_certificate: {
+    title: "Demande de certificat de résidence",
+    intro: "Veuillez renseigner les informations de votre domicile et joindre les pièces demandées.",
+    fields: [
+      { key: "nom_demandeur", label: "Nom et prénom(s) du demandeur", type: "text", placeholder: "Nom complet" },
+      { key: "profession", label: "Profession", type: "text", placeholder: "Profession" },
+      { key: "commune", label: "Commune d'habitation", type: "text", placeholder: "Commune" },
+      { key: "quartier", label: "Quartier / secteur", type: "text", placeholder: "Quartier" },
+      { key: "lot_ilot", label: "Numéro de lot et ilôt", type: "text", placeholder: "Si disponible" },
+      { key: "duree_residence", label: "Nombre d'années de résidence dans la commune", type: "text", placeholder: "Ex: 5 ans" },
+    ],
+    attachments: [
+      { label: "CNI du demandeur", required: true, accept: "image/*,.pdf" },
+      { label: "Justificatif de domicile (facture CIE/SODECI ou attestation d'hébergement)", required: true, accept: "image/*,.pdf" },
+    ],
+  },
+  full_birth_copy: {
+    title: "Demande de copie intégrale d'acte de naissance",
+    intro: "Ce document nécessite la vérification complète de la filiation.",
+    fields: [
+      { key: "titulaire_nom", label: "Nom et prénom(s) du titulaire", type: "text", placeholder: "Nom complet" },
+      { key: "date_lieu_naissance", label: "Date et lieu de naissance", type: "text", placeholder: "Ex: 15/08/1995 à Abidjan" },
+      { key: "pere_complet", label: "Nom et prénom(s) complets du père", type: "text", placeholder: "Nom complet" },
+      { key: "mere_complete", label: "Nom et prénom(s) complets de la mère", type: "text", placeholder: "Nom complet" },
+      { key: "motif", label: "Motif de la demande", type: "textarea", placeholder: "Ex: Mariage, dossier officiel, nationalité" },
+    ],
+    attachments: [
+      { label: "CNI du demandeur", required: true, accept: "image/*,.pdf" },
+      { label: "Justificatif de filiation si la demande concerne un tiers (livret de famille)", required: true, accept: "image/*,.pdf" },
+    ],
+  },
+  document_legalisation: {
+    title: "Demande de légalisation de document",
+    intro: "Ce dossier doit être vérifié au guichet et l'original physique doit être présenté lors du retrait final.",
+    fields: [
+      { key: "demandeur_nom", label: "Nom et prénom(s) du demandeur", type: "text", placeholder: "Nom complet" },
+      { key: "type_document", label: "Type de document à légaliser", type: "text", placeholder: "Ex: diplôme du BAC, relevé de notes, contrat de bail" },
+      { key: "nombre_exemplaires", label: "Nombre d'exemplaires souhaités", type: "text", placeholder: "1, 2, 3..." },
+    ],
+    attachments: [
+      { label: "Scan haute définition ou photo nette du document original", required: true, accept: "image/*,.pdf" },
+      { label: "CNI du demandeur", required: true, accept: "image/*,.pdf" },
+    ],
+    note: "⚠️ ATTENTION : Pour la légalisation, vous devez impérativement vous munir du document ORIGINAL physique lors de votre passage au guichet pour la vérification finale et l'apposition du cachet.",
+  },
+  death_extract: {
+    title: "Déclaration et extrait de décès",
+    intro: "Le déclarant devra fournir les éléments et les pièces nécessaires pour l'enregistrement du décès.",
+    fields: [
+      { key: "defunt_nom", label: "Nom et prénom(s) du défunt", type: "text", placeholder: "Nom complet" },
+      { key: "date_lieu_deces", label: "Date et lieu du décès", type: "text", placeholder: "Ex: 10/02/2026 à Abidjan" },
+      { key: "declarant_nom", label: "Nom, prénom(s) et lien de parenté du déclarant", type: "text", placeholder: "Ex: Marie Kouassi, fille" },
+    ],
+    attachments: [
+      { label: "Certificat médical de constat de décès", required: true, accept: "image/*,.pdf" },
+      { label: "CNI du déclarant", required: true, accept: "image/*,.pdf" },
+    ],
+  },
+  cni: {
+    title: "Carte Nationale d'Identité (CNI / ONI)",
+    intro: "La demande de CNI s'appuie sur les données d'état civil déjà vérifiées pour une pré-demande rapide.",
+    fields: [
+      { key: "motif_demande", label: "Motif de la demande", type: "text", placeholder: "Première demande / Renouvellement / Perte (Duplicata)" },
+      { key: "nom", label: "Nom", type: "text", placeholder: "Nom complet" },
+      { key: "prenom", label: "Prénom(s)", type: "text", placeholder: "Prénoms" },
+      { key: "date_naissance", label: "Date de naissance", type: "date" },
+      { key: "lieu_naissance", label: "Lieu de naissance", type: "text", placeholder: "Ville / commune" },
+      { key: "pere_nom", label: "Nom et prénom du père", type: "text", placeholder: "Nom complet" },
+      { key: "mere_nom", label: "Nom et prénom de la mère", type: "text", placeholder: "Nom complet" },
+      { key: "nni", label: "Numéro NNI / ancien CNI", type: "text", placeholder: "Si renouvellement" },
+      { key: "centre_enrolement", label: "Centre de prise d'empreintes / enrôlement souhaité", type: "text", placeholder: "Mairie ou centre ONI le plus proche" },
+    ],
+    attachments: [
+      { label: "Extrait d'acte de naissance (photo ou scan clair)", required: true, accept: "image/*,.pdf" },
+      { label: "Certificat de nationalité ou déclaration de perte", required: true, accept: "image/*,.pdf" },
+      { label: "Photo d'identité au format officiel", required: true, accept: "image/*,.pdf" },
+    ],
+  },
+  passport: {
+    title: "Passeport Biométrique",
+    intro: "Pré-demande en ligne, puis rendez-vous pour la capture biométrique dans le centre sélectionné.",
+    fields: [
+      { key: "identite_complete", label: "Identité complète", type: "text", placeholder: "Nom et prénom(s)" },
+      { key: "profession", label: "Profession", type: "text", placeholder: "Profession" },
+      { key: "nni", label: "Numéro NNI / CNI obligatoire", type: "text", placeholder: "Numéro" },
+      { key: "taille", label: "Taille", type: "text", placeholder: "Ex: 1m72" },
+      { key: "couleur_yeux", label: "Couleur des yeux", type: "text", placeholder: "Ex: noir / marron" },
+      { key: "contact_nom", label: "Personne à contacter en cas d'urgence", type: "text", placeholder: "Nom complet" },
+      { key: "contact_telephone", label: "Téléphone de contact", type: "text", placeholder: "Numéro de téléphone" },
+      { key: "lien_parente", label: "Lien de parenté", type: "text", placeholder: "Ex: frère, épouse, parent" },
+      { key: "centre_rendezvous", label: "Centre de rendez-vous biométrique", type: "text", placeholder: "Plateau, Cocody, etc." },
+      { key: "date_heure_rendezvous", label: "Date / heure du créneau", type: "text", placeholder: "Ex: 12/08/2026 - 10h30" },
+    ],
+    attachments: [
+      { label: "Photo / scan de la CNI (recto-verso)", required: true, accept: "image/*,.pdf" },
+      { label: "Extrait d'acte de naissance datant de moins de 3 mois", required: true, accept: "image/*,.pdf" },
+      { label: "Justificatif de profession", required: true, accept: "image/*,.pdf" },
+      { label: "Ancien passeport (si renouvellement)", required: false, accept: "image/*,.pdf" },
+    ],
+    note: "Une fois votre pré-demande validée et réglée, munissez-vous de vos originaux et présentez-vous au centre sélectionné le jour de votre rendez-vous pour la prise d'empreintes digitales et de la photo biométrique.",
+  },
+  permit: {
+    title: "Permis de conduire",
+    intro: "Préparez votre dossier de permis avec les données CNI et le certificat médical requis.",
+    fields: [
+      { key: "type_demarche", label: "Type de démarche", type: "text", placeholder: "Premier permis / Renouvellement / Extension / Duplicata" },
+      { key: "numero_cni", label: "Numéro CNI / NNI", type: "text", placeholder: "Numéro" },
+      { key: "auto_ecole", label: "Auto-école de formation", type: "text", placeholder: "Nom de l'auto-école" },
+      { key: "numero_permis_actuel", label: "Numéro du permis actuel", type: "text", placeholder: "Si renouvellement ou extension" },
+    ],
+    attachments: [
+      { label: "Photo / scan de la CNI", required: true, accept: "image/*,.pdf" },
+      { label: "Certificat d'aptitude médicale à la conduite", required: true, accept: "image/*,.pdf" },
+      { label: "Photo d'identité récente", required: true, accept: "image/*,.pdf" },
+      { label: "Attestation de succès à l'examen / ancien permis", required: false, accept: "image/*,.pdf" },
+    ],
+  },
+  casier: {
+    title: "Extrait de casier judiciaire (Bulletin n°3)",
+    intro: "Dossier rapide pour les demandes liées à l'embauche, concours ou visa.",
+    fields: [
+      { key: "nom", label: "Nom et prénom(s)", type: "text", placeholder: "Nom complet" },
+      { key: "date_naissance", label: "Date et lieu de naissance", type: "text", placeholder: "Ex: 25/06/1994 à Abidjan" },
+      { key: "tribunal_naissance", label: "Tribunal de première instance de naissance", type: "text", placeholder: "Ex: Tribunal de Yopougon, Abidjan, Bouaké" },
+      { key: "pere_nom", label: "Nom complet du père", type: "text", placeholder: "Nom complet" },
+      { key: "mere_nom", label: "Nom complet de la mère", type: "text", placeholder: "Nom complet" },
+      { key: "motif_demande", label: "Motif de la demande", type: "text", placeholder: "Concours administratif, Embauche, Visa, etc." },
+    ],
+    attachments: [
+      { label: "Photo / scan de la CNI ou attestation d'identité", required: true, accept: "image/*,.pdf" },
+      { label: "Photo / scan de l'extrait d'acte de naissance", required: true, accept: "image/*,.pdf" },
+    ],
+  },
+};
 
+// ====================================================================================
+// COMPOSANTS UTILITAIRES
+// ====================================================================================
+
+function Progress({ step }: { step: number }) {
+  const steps = ["Catégorie", "Document", "Confirmation"];
   return (
     <div className="flex items-center justify-center gap-0 mb-8">
-      {etapes.map((label, i) => {
-        const isCurrent = i === etape;
-        const isCompleted = i < etape;
-
-        return (
+      {steps.map((label, i) => (
         <div key={i} className="flex items-center">
           <div className="flex flex-col items-center">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-200
-              ${isCompleted ? "bg-green-600 text-white" : isCurrent ? "bg-[#0A2540] text-white ring-4 ring-blue-100" : "bg-gray-100 text-gray-400"}`}>
-              {isCompleted ? "✓" : i + 1}
+              ${i < step - 1 ? "bg-green-600 text-white" : i === step - 1 ? "bg-[#0A2540] text-white ring-4 ring-blue-100" : "bg-gray-100 text-gray-400"}`}>
+              {i < step - 1 ? "✓" : i + 1}
             </div>
-            <span className={`text-[10px] mt-1 font-medium text-center max-w-[80px] ${isCurrent ? "text-[#0A2540]" : "text-gray-400"}`}>
+            <span className={`text-[10px] mt-1 font-medium text-center max-w-[80px] ${i === step - 1 ? "text-[#0A2540]" : "text-gray-400"}`}>
               {label}
             </span>
           </div>
-          {i < etapes.length - 1 && (
-            <div className={`w-10 h-0.5 mb-4 mx-1 transition-all duration-200 ${isCompleted ? "bg-green-500" : "bg-gray-200"}`} />
+          {i < steps.length - 1 && (
+            <div className={`w-10 h-0.5 mb-4 mx-1 transition-all duration-200 ${i < step - 1 ? "bg-green-500" : "bg-gray-200"}`} />
           )}
         </div>
-        );
-      })}
+      ))}
     </div>
   );
 }
 
-// ─── Composant Upload ───
 function UploadZone({ label, hint, done, onFile }: {
   label: string;
   hint: string;
@@ -98,760 +401,765 @@ function UploadZone({ label, hint, done, onFile }: {
   );
 }
 
-// ─── QR Code simulé ───
-function QRCodeDisplay({ reference }: { reference: string }) {
-  const cells = Array.from({ length: 12 }, (_, i) => Array.from({ length: 12 }, (_, j) => (i + j) % 3 !== 0));
-  return (
-    <div className="inline-block p-3 bg-white border-4 border-black rounded-lg">
-      {cells.map((row, i) => (
-        <div key={i} className="flex">
-          {row.map((on, j) => (
-            <div key={j} className={`w-3 h-3 ${on ? "bg-black" : "bg-white"}`} />
-          ))}
-        </div>
-      ))}
-    </div>
-  );
+type DocumentItem = {
+  id: string;
+  name: string;
+  time: string;
+  price: string;
+};
+
+type PaymentMethod = 'physique' | 'digital' | null;
+
+const PROFILE_STORAGE_KEY = "kronodoc_profile_v1";
+const PROFILE_KEYS = new Set([
+  "nom",
+  "prenom",
+  "date_naissance",
+  "lieu_naissance",
+  "cni",
+  "nni",
+  "numero_cni",
+  "motif_demande",
+  "pere_nom",
+  "mere_nom",
+  "identite_complete",
+  "profession",
+  "nom_demandeur",
+  "titulaire_nom",
+  "defunt_nom",
+  "centre_enrolement",
+  "centre_rendezvous",
+  "tribunal_naissance",
+]);
+
+const DEMO_PROFILE_BY_DOCUMENT: Record<string, Record<string, string>> = {
+  birth_extract: {
+    nom: "Kouassi",
+    prenom: "Amani",
+    date_naissance: "1998-05-12",
+    lieu_naissance: "Abidjan",
+    registre_numero: "AB-0458",
+    registre_annee: "1998",
+  },
+  marriage_extract: {
+    nom_epoux: "Kouassi Yao",
+    nom_epouse: "Diarra Awa",
+    date_mariage: "2022-02-15",
+    registre_mariage: "MR-2214",
+  },
+  birth_declaration: {
+    enfant_prenoms: "Nina Kouassi",
+    enfant_sexe: "Féminin",
+    enfant_date_heure: "12/04/2026 à 21h40",
+    enfant_lieu: "Centre Hospitalier de Treichville",
+    pere_nom: "Kouassi Jean",
+    pere_profession: "Comptable",
+    pere_domicile: "Yopougon",
+    pere_cni: "CI123456789",
+    mere_nom: "Diarra Aline",
+    mere_profession: "Infirmière",
+    mere_domicile: "Yopougon",
+    mere_cni: "CI987654321",
+    statut_matrimonial: "Mariés",
+  },
+  residence_certificate: {
+    nom_demandeur: "Kouassi Amani",
+    profession: "Agent de sécurité",
+    commune: "Abidjan",
+    quartier: "Plateau",
+    lot_ilot: "Lot 22, Ilot 14",
+    duree_residence: "5 ans",
+  },
+  full_birth_copy: {
+    titulaire_nom: "Kouassi Amani",
+    date_lieu_naissance: "12/05/1998 à Abidjan",
+    pere_complet: "Kouassi Jean",
+    mere_complete: "Diarra Aline",
+    motif: "Dossier de mariage",
+  },
+  document_legalisation: {
+    demandeur_nom: "Kouassi Amani",
+    type_document: "Diplôme du BAC",
+    nombre_exemplaires: "2",
+  },
+  death_extract: {
+    defunt_nom: "Diarra Marcel",
+    date_lieu_deces: "10/02/2026 à Abidjan",
+    declarant_nom: "Diarra Yao, fils",
+  },
+  cni: {
+    motif_demande: "Première demande",
+    nom: "Kouassi",
+    prenom: "Amani",
+    date_naissance: "1998-05-12",
+    lieu_naissance: "Abidjan",
+    pere_nom: "Kouassi Jean",
+    mere_nom: "Diarra Aline",
+    nni: "CI-2024-9911",
+    centre_enrolement: "Centre ONI Plateau",
+  },
+  passport: {
+    identite_complete: "Kouassi Amani",
+    profession: "Chef de projet",
+    nni: "CI-2024-9911",
+    taille: "1m72",
+    couleur_yeux: "Noir",
+    contact_nom: "Diarra Aline",
+    contact_telephone: "+225 07 00 00 00 01",
+    lien_parente: "Épouse",
+    centre_rendezvous: "Plateau",
+    date_heure_rendezvous: "12/08/2026 - 10h30",
+  },
+  permit: {
+    type_demarche: "Premier permis",
+    numero_cni: "CI123456789",
+    auto_ecole: "Auto École Excellence",
+    numero_permis_actuel: "Permis non applicable",
+  },
+  casier: {
+    nom: "Kouassi Amani",
+    date_naissance: "25/06/1994 à Abidjan",
+    tribunal_naissance: "Tribunal de Yopougon",
+    pere_nom: "Kouassi Jean",
+    mere_nom: "Diarra Aline",
+    motif_demande: "Embauche",
+  },
+};
+
+function loadStoredProfile(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed ?? {};
+  } catch {
+    return {};
+  }
 }
 
+function persistProfile(data: Record<string, string>) {
+  if (typeof window === "undefined") return;
 
-// --- Interfaces pour un typage plus strict des états ---
-interface FormData { // Typage des données du formulaire
-  nom: string;
-  prenom: string;
-  dateNaissance: string;
-  telephone: string;
-  email?: string;
-  [key: string]: string; // Pour les champs dynamiques
+  const filtered: Record<string, string> = {};
+  Object.entries(data).forEach(([key, value]) => {
+    if (PROFILE_KEYS.has(key) && typeof value === "string" && value.trim()) {
+      filtered[key] = value;
+    }
+  });
+
+  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(filtered));
 }
 
-interface FichiersData { // Typage des fichiers uploadés
-  cni: string | null;
-  domicile: string | null;
-  hebergement: string | null;
-  passeportAncien: string | null;
-  photosIdentite: string | null;
-  recuPaiement: string | null;
-  declarationPerte: string | null;
-  autorisationParentale: string | null;
-  certificatMedical: string | null;
-  livretFamille: string | null;
-  jugementDivorce: string | null;
-  acteOrigine: string | null;
-}
+// ====================================================================================
+// PAGE PRINCIPALE
+// ====================================================================================
+function CitoyenPage() {
+  const [step, setStep] = useState(1);
+  const [isTestMode, setIsTestMode] = useState<boolean>(() => isDevTestModeEnabled());
+  const [selectedCategory, setSelectedCategory] = useState<keyof typeof SERVICES_DATA | null>(null);
+  const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<DocumentItem | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [legalisationFile, setLegalisationFile] = useState<File | null>(null);
+  const [legalisationCopies, setLegalisationCopies] = useState(1);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
+  // --- États pour le formulaire dynamique de l'étape 3 ---
+  const [beneficiaryType, setBeneficiaryType] = useState<"for_me" | "for_child" | "for_third_party">("for_me");
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [documentFiles, setDocumentFiles] = useState<Record<string, File | null>>({});
 
+  const categoryData = selectedCategory ? SERVICES_DATA[selectedCategory] : null;
 
-// --- Composant de formulaire dynamique ---
-function DynamicForm({ fields, form, setForm }: { fields: FormFieldConfig[], form: FormData, setForm: (form: FormData) => void }) {
-  const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white";
-  const labelCls = "text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5";
+  const toggleTestMode = () => {
+    const nextValue = !isTestMode;
+    setIsTestMode(nextValue);
+    setDevTestMode(nextValue);
+  };
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setForm({ ...form, [k]: e.target.value });
+  const fillTestDraft = (documentId: string) => {
+    const demoProfile = DEMO_PROFILE_BY_DOCUMENT[documentId] ?? {};
+    const config = DOCUMENT_FORM_CONFIG[documentId];
+    const nextFormData = { ...loadStoredProfile(), ...demoProfile };
+    setFormData(nextFormData);
+    persistProfile(nextFormData);
 
-  return (
-    <div className="space-y-4">
-      {fields.map(field => (
-        <div key={field.id}>
-          <label className={labelCls}>{field.label}{field.required && <span className="text-red-500">*</span>}</label>
-          {field.type === "select" ? (
-            <select className={inputCls} value={form[field.id] || ""} onChange={set(field.id)} required={field.required}>
-              <option value="">Sélectionner...</option>
-              {field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          ) : field.type === "textarea" ? (
-            <textarea placeholder={field.placeholder} className={`${inputCls} h-24`} value={form[field.id] || ""} onChange={set(field.id)} required={field.required} />
-          ) : (
-            <input
-              type={field.type || "text"}
-              placeholder={field.placeholder}
-              className={inputCls}
-              value={form[field.id] || ""}
-              onChange={set(field.id)}
-              required={field.required}
-            />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
+    if (config) {
+      const nextFiles: Record<string, File> = {};
+      config.attachments.forEach((attachment) => {
+        nextFiles[attachment.label] = new File(["Test file"], `${attachment.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`, {
+          type: "application/pdf",
+        });
+      });
+      setDocumentFiles(nextFiles);
+    }
+  };
 
-// --- Sous-composant pour l'information "Pas de smartphone ?" ---
-function NoSmartphoneInfo() {
-  return (
-    <div className="mt-8 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3">
-      <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-blue-500" />
-      <p className="text-xs text-blue-700">
-        <strong>Vous n'avez pas de smartphone ?</strong> Rendez-vous dans un
-        cybercafé partenaire ou directement au guichet d'accueil de votre
-        mairie. Un agent vous assistera gratuitement.
-      </p>
-    </div>
-  );
-}
+  const filteredSections = useMemo(() => {
+    if (!categoryData || !searchQuery) {
+      return categoryData?.sections || [];
+    }
+    const lowerCaseQuery = searchQuery.toLowerCase();
+    return categoryData.sections
+      .map(section => ({
+        ...section,
+        items: section.items.filter(item => item.name.toLowerCase().includes(lowerCaseQuery))
+      }))
+      .filter(section => section.items.length > 0);
+  }, [categoryData, searchQuery]);
 
-interface StepProps {
-  setEtape: (etape: number) => void;
-  setDocChoisi: (doc: DocType | null) => void;
-  docChoisi: DocType | null;
-  mairie: string;
-  setMairie: (mairie: string) => void;
-  recherche: string;
-  setRecherche: (recherche: string) => void;
-  nombreCopies: number;
-  setNombreCopies: (n: number) => void;
-  form: FormData;
-  setForm: (form: FormData) => void;
-  fichiers: FichiersData;
-  setFichiers: (fichiers: FichiersData) => void;
-  heberge: boolean;
-  setHeberge: (heberge: boolean) => void;
-  paiement: string;
-  setPaiement: (paiement: string) => void;
-  reference: string;
-  selectedDeliveryOption: DeliveryOption | null;
-  setSelectedDeliveryOption: (option: DeliveryOption | null) => void;
-  etapeInformationsIndex: number;
-  etapeChoixDelivranceIndex: number;
-}
+  const handleSelectCategory = (categoryId: keyof typeof SERVICES_DATA) => {
+    setSelectedCategory(categoryId);
+    setStep(2);
+  };
+
+  const handleBackToCategories = () => {
+    setSelectedCategory(null);
+    setSelectedEntity(null);
+    setSearchQuery("");
+    setSelectedDocument(null);
+    setBeneficiaryType("for_me");
+    setStep(1);
+  };
+
+  const handleTestModeToggle = () => {
+    toggleTestMode();
+  };
+
+  useEffect(() => {
+    if (!selectedDocument) return;
+    const stored = loadStoredProfile();
+    setFormData(prev => ({ ...stored, ...prev }));
+  }, [selectedDocument]);
+
+  const handleSelectDocument = (doc: DocumentItem) => {
+    setSelectedDocument(doc);
+    setStep(3); // Passe à l'étape du formulaire
+  };
+
+  const handleBackToDocumentSelection = () => {
+    setSelectedDocument(null);
+    setBeneficiaryType("for_me");
+    setStep(2);
+  }
+
+  const qrStatusLabel = paymentMethod === "digital" ? "PAYÉ EN LIGNE" : "NON PAYÉ / À ENCAISSER";
+  const qrStatusColor = paymentMethod === "digital" ? "bg-emerald-100 text-emerald-800 border-emerald-200" : "bg-amber-100 text-amber-800 border-amber-200";
+  const qrInstruction =
+    paymentMethod === "digital"
+      ? "Le guichet vérifiera les pièces physiques puis passera directement à la validation de votre dossier."
+      : "Présentez-vous à la mairie avec vos originaux et votre QR Code. L’agent encaissera les frais à la caisse avant validation.";
 
 // ─── PAGE PRINCIPALE ───
-function CitoyenPage() {
-  const navigate = useNavigate();
-  const [etape, setEtape] = useState(0);
-  const [docChoisi, setDocChoisi] = useState<DocType | null>(null); // Typage plus précis
-  const [mairie, setMairie] = useState("");
-  const [nombreCopies, setNombreCopies] = useState(1);
-  const [heberge, setHeberge] = useState(false);
-  const [paiement, setPaiement] = useState("wave");
-  const [recherche, setRecherche] = useState("");
-  const [form, setForm] = useState<FormData>({ nom: "", prenom: "", dateNaissance: "", telephone: "" });
-  const [fichiers, setFichiers] = useState<FichiersData>({
-    cni: null,
-    domicile: null,
-    hebergement: null,
-    passeportAncien: null,
-    photosIdentite: null,
-    recuPaiement: null,
-    declarationPerte: null,
-    autorisationParentale: null,
-    certificatMedical: null,
-    livretFamille: null,
-    jugementDivorce: null,
-    acteOrigine: null,
-  });
-  const [selectedDeliveryOption, setSelectedDeliveryOption] = useState<DeliveryOption | null>(null);
-  const [reference] = useState(`KDC-2026-${String(Math.floor(Math.random() * 90000 + 10000))}`);
-  const { user } = useSession(); // To pre-fill form data
-
-  // Pre-fill form data if user is logged in
-  useEffect(() => {
-    if (user) {
-      setForm(prevForm => ({
-        ...prevForm,
-        nom: user.user_metadata?.last_name || "",
-        prenom: user.user_metadata?.first_name || "",
-        email: user.email || "",
-        telephone: user.user_metadata?.phone || "",
-      }));
-    }
-  }, [user]);
-
-  // La barre de progression s'adapte au parcours utilisateur
-  const ETAPES_PROGRESS = (docChoisi?.groupe === 'A' || docChoisi?.groupe === 'C')
-    ? ["Document", "Informations", "Pièces", "QR Code"]
-    : ["Document", "Informations", "Pièces", "Paiement", "Récupération"];
-
-  const DYNAMIC_ETAPES = useMemo(() => {
-    if (!docChoisi) return ["Document", "Confirmation"];
-
-    const base = ["Document"];
-    if (docChoisi.workflow) {
-      docChoisi.workflow.forEach(step => {
-        base.push(step.label);
-      });
-    } else {
-      if (docChoisi.formFields && docChoisi.formFields.length > 0) {
-        base.push("Informations");
-      }
-      if (docChoisi.justificatifs && docChoisi.justificatifs.length > 0) {
-        base.push("Pièces");
-      }
-      if (docChoisi.deliveryOptions && docChoisi.deliveryOptions.length > 0) {
-        base.push("Délivrance");
-      }
-      if ((docChoisi.prix ?? 0) > 0 || (docChoisi.deliveryOptions?.some(o => o.prix > 0))) {
-        base.push("Paiement");
-      }
-    }
-    base.push("Confirmation");
-    return base;
-  }, [docChoisi]);
-
-  const getEtapeIndex = (label: string) => DYNAMIC_ETAPES.indexOf(label);
-
-  const etapeInformationsIndex = getEtapeIndex("Informations");
-  const etapePiecesIndex = getEtapeIndex("Pièces");
-  const etapeChoixDelivranceIndex = getEtapeIndex("Délivrance");
-  const etapePaiementIndex = getEtapeIndex("Paiement"); // Assuming payment is part of a workflow or a final step
-  const etapeConfirmationIndex = getEtapeIndex("Confirmation");
-  
   return (
     <div className="min-h-screen bg-muted/40 flex flex-col">
       <SiteHeader />
-      <main className="mx-auto max-w-2xl px-4 py-10">
+      <main className="mx-auto w-full max-w-5xl px-4 pb-10 pt-6 md:pt-8">
         <div className="space-y-8">
-          {/* Titre */}
-          {etape === 0 ? (
+          {step === 1 && (
             <div className="text-center">
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">Faire une demande</h1>
+              <div className="mb-4 flex items-center justify-center gap-3">
+                <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">Faire une demande</h1>
+                <button
+                  type="button"
+                  onClick={handleTestModeToggle}
+                  className={`inline-flex items-center rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] transition-all ${
+                    isTestMode
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-700 shadow-sm"
+                      : "border-border bg-white text-muted-foreground hover:border-emerald-300 hover:text-emerald-700"
+                  }`}
+                >
+                  {isTestMode ? "Mode test actif" : "Laisser passer test"}
+                </button>
+              </div>
               <p className="mt-2 text-muted-foreground">Remplissez votre dossier depuis chez vous. Venez juste signer au guichet.</p>
             </div>
-          ) : null}
+          )}
 
-          <Progress etape={etape} etapes={DYNAMIC_ETAPES} currentDoc={docChoisi} />
+          {isTestMode && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span className="font-semibold">Mode test activé : validation de formulaire désactivée et données d’exemple disponibles.</span>
+                <button
+                  type="button"
+                  onClick={handleTestModeToggle}
+                  className="text-xs font-bold underline underline-offset-2"
+                >
+                  Désactiver
+                </button>
+              </div>
+            </div>
+          )}
 
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm md:p-8">
+          <Progress step={step} />
 
-            {/* ── ÉTAPE 0 : Choix du document ── */}
-            {etape === 0 && (
-              <Etape0_ChoixDocument {...{ setEtape, docChoisi, setDocChoisi, mairie, setMairie, recherche, setRecherche, nombreCopies, setNombreCopies, etapeChoixDelivranceIndex, etapeInformationsIndex } as any} />
+          <div className="rounded-[28px] border border-border bg-card p-6 shadow-[0_18px_45px_-28px_rgba(10,37,64,0.35)] md:p-8">
+            {/* ÉTAPE 1 : GRILLE DES CATÉGORIES */}
+            {step === 1 && (
+              <div>
+                <h2 className="text-lg font-bold text-[#0A2540] mb-1">De quel domaine s'agit-il ?</h2>
+                <p className="text-xs text-gray-400 mb-6">Sélectionnez le service public concerné par votre demande.</p>
+                <div className="space-y-3">
+                  {Object.entries(SERVICES_DATA).map(([key, cat]) => (
+                    <button
+                      key={key}
+                      className="group w-full rounded-2xl border border-gray-200 bg-gradient-to-r from-white to-gray-50 p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[#009A44] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-green-200"
+                      onClick={() => handleSelectCategory(key as keyof typeof SERVICES_DATA)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0A2540] text-xl text-white shadow-sm">
+                          {cat.icon}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-base font-bold text-[#0A2540]">{cat.title}</div>
+                          <p className="mt-1 text-sm text-gray-600 leading-relaxed">{cat.description}</p>
+                        </div>
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-50 text-green-700 transition-colors group-hover:bg-green-100">
+                          <ChevronRight size={16} />
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
-            {/* ── ÉTAPE : Choix du mode de délivrance (si applicable) ── */}
-            {etape === etapeChoixDelivranceIndex && docChoisi?.deliveryOptions && (
-              <Etape_ChoixDelivrance {...{ setEtape, docChoisi, selectedDeliveryOption, setSelectedDeliveryOption, etapeChoixDelivranceIndex, etapePaiementIndex, etapeInformationsIndex, etapePiecesIndex } as any} />
+            {/* ÉTAPE 2 : SÉLECTION ENTITÉ & DOCUMENT */}
+            {step === 2 && categoryData && (
+              <div>
+                <button onClick={handleBackToCategories} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6">
+                  <ArrowLeft size={16} /> Retour aux catégories
+                </button>
+
+                {/* Sélecteur d'entité */}
+                <div className="mb-5">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">{categoryData.entityLabel}</label>
+                  <select
+                    onChange={(e) => setSelectedEntity(e.target.value)}
+                    defaultValue=""
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                  >
+                    <option value="" disabled>{categoryData.entityPlaceholder}</option>
+                    {categoryData.entities.map(entity => <option key={entity} value={entity}>{entity}</option>)}
+                  </select>
+                </div>
+
+                {/* Contenu affiché seulement si une entité est choisie */}
+                {selectedEntity && (
+                  <>
+                    {/* Barre de recherche (sauf pour légalisation) */}
+                    {selectedCategory !== 'legalisation' && (
+                      <div className="relative my-6">
+                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Rechercher un document</label>
+                        <Search size={16} className="absolute left-4 top-10 text-gray-400" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={e => setSearchQuery(e.target.value)}
+                          placeholder="Ex: certificat de résidence, acte de naissance..."
+                          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white pl-10"
+                        />
+                      </div>
+                    )}
+
+                    {/* Titre du domaine */}
+                    <h2 className="text-lg font-bold text-[#0A2540] mb-4 mt-6">{categoryData.icon} {categoryData.title}</h2>
+
+                    {/* Cas spécifique : Légalisation */}
+                    {selectedCategory === 'legalisation' ? (
+                      <div className="space-y-6">
+                        <UploadZone
+                          label="Document à légaliser"
+                          hint="Scannez ou prenez en photo votre diplôme, attestation, contrat..."
+                          done={legalisationFile?.name || null}
+                          onFile={(e) => e.target.files && setLegalisationFile(e.target.files[0])}
+                        />
+                        {legalisationFile && (
+                          <div>
+                            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Nombre de copies</label>
+                            <div className="flex items-center gap-2">
+                              <Copy size={16} className="text-gray-400" />
+                              <input
+                                type="number"
+                                value={legalisationCopies}
+                                onChange={e => setLegalisationCopies(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                                min="1"
+                                className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center"
+                              />
+                            </div>
+                            <p className="text-sm text-gray-500 mt-2">Total à payer : <span className="font-bold text-orange-600">{legalisationCopies * 500} FCFA</span></p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Liste des documents pour les autres catégories */
+                      <div className="space-y-6">
+                        {filteredSections.map((section, i) => (
+                          <div key={i}>
+                            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-3">{section.title}</h3>
+                            <div className="space-y-2">
+                              {section.items.map(item => (
+                                <div key={item.id} className="w-full text-left border-2 border-gray-100 rounded-xl p-4 flex items-center justify-between">
+                                  <div>
+                                    <div className="font-semibold text-sm text-[#0A2540]">{item.name}</div>
+                                    <div className="text-xs text-gray-400 mt-0.5" dangerouslySetInnerHTML={{ __html: `Délai estimé : ${item.time}` }} />
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <div className="font-bold text-sm text-orange-600">{item.price}</div>
+                                    <button onClick={() => handleSelectDocument(item)} className="px-4 py-2 bg-[#009A44] text-white font-bold rounded-lg hover:bg-green-700 transition-colors text-xs">
+                                      Demander
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             )}
 
-            {/* ── ÉTAPE 1 : Informations personnelles ── */}
-            {etape === etapeInformationsIndex && (
-              <Etape1_InformationsPersonnelles {...{ setEtape, docChoisi, form, setForm, etapeChoixDelivranceIndex, etapePiecesIndex, etapeConfirmationIndex } as any} />
+            {/* ÉTAPE 3 : FORMULAIRE D'INFORMATIONS */}
+            {step === 3 && selectedDocument && (
+              <Etape3_InformationsEtJustificatif
+                selectedDocument={selectedDocument}
+                beneficiaryType={beneficiaryType}
+                setBeneficiaryType={setBeneficiaryType}
+                formData={formData}
+                setFormData={setFormData}
+                documentFiles={documentFiles}
+                setDocumentFiles={setDocumentFiles}
+                onBack={handleBackToDocumentSelection}
+                onComplete={() => setStep(4)}
+              />
             )}
 
-            {/* ── ÉTAPE 2 : Pièces justificatives ── */}
-            {etape === etapePiecesIndex && (
-              <Etape2_PiecesJustificatives {...{ setEtape, docChoisi, form, reference, fichiers, setFichiers, heberge, setHeberge, etapeInformationsIndex, etapePaiementIndex, etapeConfirmationIndex, etapeChoixDelivranceIndex } as any} />
+            {/* ÉTAPE 4 : CHOIX DU PAIEMENT */}
+            {step === 4 && (
+              <div>
+                <button onClick={() => setStep(4)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6">
+                  <ArrowLeft size={16} /> Retour aux informations
+                </button>
+                <h2 className="text-lg font-bold text-[#0A2540] mb-1">Mode de règlement</h2>
+                <p className="text-xs text-gray-400 mb-6">Choisissez comment régler les frais administratifs de votre dossier.</p>
+
+                <div className="space-y-4">
+                  <PaymentOption
+                    icon="🏢"
+                    title="Paiement à la caisse de la mairie"
+                    description="Aucun paiement en ligne. Vous payez les frais physiques au guichet lors de votre passage avec vos originaux."
+                    isSelected={paymentMethod === 'physique'}
+                    onClick={() => setPaymentMethod('physique')}
+                  />
+                  <PaymentOption
+                    icon="📱"
+                    title="Paiement en ligne"
+                    description="Payez par Wave, Orange Money ou carte. Le QR généré sera marqué comme payé et la caisse n’encaissera rien."
+                    isSelected={paymentMethod === 'digital'}
+                    onClick={() => setPaymentMethod('digital')}
+                  />
+                </div>
+
+                <button onClick={() => setStep(5)} disabled={!paymentMethod} className="mt-8 w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
+                  {paymentMethod === 'digital' ? 'Payer et Valider' : 'Valider ma pré-demande'}
+                </button>
+              </div>
             )}
 
-            {/* ── ÉTAPE 3 : Paiement ── */}
-            {etape === etapePaiementIndex && (
-              <Etape3_Paiement {...{ setEtape, docChoisi, form, mairie, nombreCopies, paiement, setPaiement, reference, etapePaiementIndex, selectedDeliveryOption, etapePiecesIndex, etapeConfirmationIndex } as any} />
-            )}
+            {/* ÉTAPE 5 : CONFIRMATION ET QR CODE */}
+            {step === 5 && selectedDocument && selectedEntity && (
+              <div className="text-center">
+                <CheckCircle size={48} className="text-green-500 mx-auto mb-4" />
+                <h2 className="text-xl font-extrabold text-[#0A2540] mb-1">Pré-demande enregistrée !</h2>
+                <p className="text-sm text-gray-500 mb-6">Votre dossier est en cours de validation. Présentez ce QR code au guichet de : <span className="font-semibold text-gray-700">{selectedEntity}</span>.</p>
 
-            {/* ── ÉTAPE 3 : Paiement ── */}
-            {etape === etapeConfirmationIndex && (
-              <Etape4_Recuperation {...{ setEtape, docChoisi, form, mairie, nombreCopies, reference, navigate, setDocChoisi, selectedDeliveryOption } as any} />
+                <div className="mb-4 flex justify-center">
+                  <div className={`inline-block rounded-2xl border-4 p-4 ${paymentMethod === "digital" ? "border-emerald-500 bg-emerald-50" : "border-amber-400 bg-amber-50"}`}>
+                    <QrCode size={160} strokeWidth={2.5} className={paymentMethod === "digital" ? "text-emerald-700" : "text-amber-700"} />
+                  </div>
+                </div>
+
+                <div className="mb-3 font-mono text-lg font-bold tracking-widest text-gray-700">KDC-2024-AB76F2</div>
+
+                <div className={`mb-5 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${qrStatusColor}`}>
+                  {qrStatusLabel}
+                </div>
+
+                <div className="mb-6 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm text-gray-700">
+                  <div className="font-semibold text-[#0A2540]">Statut de votre dossier</div>
+                  <p className="mt-1">Pré-demande en cours · En attente de validation physique et de vérification par l’agent de guichet.</p>
+                  <p className="mt-2 text-xs text-gray-500">{qrInstruction}</p>
+                </div>
+
+                <div className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  Veuillez vous rendre à la mairie de <span className="font-bold">{selectedEntity}</span> muni de vos originaux et de votre QR Code. L’agent scannera votre dossier puis validera la transmission pour la signature du maire.
+                </div>
+
+                <button onClick={handleBackToCategories} className="mt-6 w-full py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors text-sm">
+                  Faire une autre demande
+                </button>
+              </div>
             )}
           </div>
         </div>
-
-        {/* Info bas de page */}
-        {etape < DYNAMIC_ETAPES.length - 1 && (
-          <NoSmartphoneInfo />
-        )}
       </main>
       <SiteFooter />
     </div>
   );
 }
 
+function Etape3_InformationsEtJustificatif({
+  selectedDocument,
+  beneficiaryType,
+  setBeneficiaryType,
+  formData,
+  setFormData,
+  documentFiles,
+  setDocumentFiles,
+  onBack,
+  onComplete,
+}: {
+  selectedDocument: DocumentItem;
+  beneficiaryType: "for_me" | "for_child" | "for_third_party";
+  setBeneficiaryType: React.Dispatch<React.SetStateAction<"for_me" | "for_child" | "for_third_party">>;
+  formData: Record<string, string>;
+  setFormData: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  documentFiles: Record<string, File | null>;
+  setDocumentFiles: React.Dispatch<React.SetStateAction<Record<string, File | null>>>;
+  onBack: () => void;
+  onComplete: () => void;
+}) {
+  const config = DOCUMENT_FORM_CONFIG[selectedDocument.id] ?? {
+    title: selectedDocument.name,
+    intro: "Complétez les informations demandées pour vous inscrire.",
+    fields: [
+      { key: "nom", label: "Nom", type: "text" as const, placeholder: "Nom" },
+      { key: "prenom", label: "Prénom(s)", type: "text" as const, placeholder: "Prénoms" },
+      { key: "cni", label: "Numéro de CNI", type: "text" as const, placeholder: "Numéro de CNI" },
+    ],
+    attachments: [{ label: "Pièce justificative", required: true, accept: "image/*,.pdf" }],
+  };
 
-// ====================================================================================
-// ========================== SOUS-COMPOSANTS PAR ÉTAPE ===============================
-// ====================================================================================
+  const handleFieldChange = (key: string, value: string) => {
+    const nextData = { ...formData, [key]: value };
+    setFormData(nextData);
+    persistProfile(nextData);
+  };
 
-// NOTE: The following components are extracted from the main CitoyenPage component
-// to improve readability and maintainability. They receive state and setters as props.
+  const handleAttachmentChange = (label: string, file: File | null) => {
+    setDocumentFiles(prev => ({ ...prev, [label]: file }));
+  };
 
-type StepSpecificProps<T> = StepProps & T;
+  const identityLabel = "Pièce d'identité du demandeur (CNI, Attestation, Passeport, Livret de famille)";
+  const beneficiaryOptions = [
+    { value: "for_me", label: "Pour moi-même" },
+    { value: "for_child", label: "Pour mon enfant / un mineur" },
+    { value: "for_third_party", label: "Pour un tiers" },
+  ] as const;
 
-// --- ÉTAPE 0 : CHOIX DU DOCUMENT ---
-function Etape0_ChoixDocument({ setEtape, docChoisi, setDocChoisi, mairie, setMairie, recherche, setRecherche, nombreCopies, setNombreCopies, etapeChoixDelivranceIndex, etapeInformationsIndex }: StepSpecificProps<{ etapeInformationsIndex: number }>) {
-  
-  const documentsFiltres = DOCUMENTS.filter(doc =>
-    doc.label.toLowerCase().includes(recherche.toLowerCase())
-  );
-  
+  const requiredFieldsMissing = config.fields.some(field => field.required !== false && !String(formData[field.key] ?? "").trim());
+  const requiredFilesMissing = config.attachments.some(attachment => attachment.required && !documentFiles[attachment.label]);
+  const canContinue = isDevTestModeEnabled() || (!requiredFieldsMissing && !requiredFilesMissing);
+
   return (
     <div>
-      <div className="mb-5">
-        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Mairie concernée</label>
-        <select value={mairie} onChange={e => setMairie(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
-          <option value="">Sélectionner votre mairie...</option>
-          {MAIRIES.map(m => <option key={m} value={m}>{m}</option>)}
-        </select>
-      </div>
-      <div className="relative mb-4">
-        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Rechercher un document</label>
-        <Search size={16} className="absolute left-4 top-10 text-gray-400" />
-        <input
-          type="text"
-          value={recherche}
-          onChange={e => setRecherche(e.target.value)}
-          placeholder="Ex: certificat de résidence, acte de naissance..."
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white pl-10"
-        />
-      </div>
-      <div className="space-y-6">
-        {CATEGORIES.map(categorie => {
-          const sousCategoriesDeLaCat = SOUS_CATEGORIES.filter(sc => sc.categorieId === categorie.id);
-          const documentsDeLaCat = DOCUMENTS.filter(doc => doc.categorie === categorie.id && doc.label.toLowerCase().includes(recherche.toLowerCase()));
+      <button onClick={onBack} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6">
+        <ArrowLeft size={16} /> Retour à la sélection
+      </button>
 
-          if (documentsDeLaCat.length === 0 && sousCategoriesDeLaCat.length === 0) return null; // Hide empty categories
-
-          return (
-            <div key={categorie.id}>
-              <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wider mb-3">{categorie.icon} {categorie.titre}</h3>
-              {sousCategoriesDeLaCat?.map(sousCat => {
-                const docsDeLaSousCat = documentsDeLaCat.filter(doc => doc.sousCategorie === sousCat.id);
-                if (docsDeLaSousCat.length === 0) return null;
-                return (
-                  <div key={sousCat.id} className="mb-4">
-                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{sousCat.titre}</h4>
-                    {docsDeLaSousCat.map(doc => (
-                      <button key={doc.id} onClick={() => setDocChoisi(doc)}
-                        className={`w-full text-left border-2 rounded-xl p-4 transition-all flex items-center justify-between mb-2
-                          ${docChoisi?.id === doc.id ? "border-[#009A44] bg-green-50" : "border-gray-100 hover:border-gray-200"}`}>
-                        <div>
-                          <div className="font-semibold text-sm text-[#0A2540]">{doc.label}</div>
-                          <div className="text-xs text-gray-400 mt-0.5">{`Délai estimé : ${doc.delai || 'Variable'}`}</div>
-                        </div>
-                        <div className="text-right flex flex-col items-end">
-                          <div className={`font-bold text-sm ${doc.prix && doc.prix > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
-                            {doc.prix && doc.prix > 0 ? `${doc.prix} FCFA` : 'Gratuit'}
-                          </div>
-                          {docChoisi?.id === doc.id && <CheckCircle size={16} className="text-green-500 mt-1" />}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                );
-              })}
-              {/* Direct documents not in sub-categories, if any */}
-              {documentsDeLaCat.filter(doc => !sousCategoriesDeLaCat.some(sc => sc.id === doc.sousCategorie)).map(doc => (
-                <button key={doc.id} onClick={() => setDocChoisi(doc)}
-                  className={`w-full text-left border-2 rounded-xl p-4 transition-all flex items-center justify-between mb-2
-                    ${docChoisi?.id === doc.id ? "border-[#009A44] bg-green-50" : "border-gray-100 hover:border-gray-200"}`}>
-                  <div>
-                    <div className="font-semibold text-sm text-[#0A2540]">{doc.label}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">{`Délai estimé : ${doc.delai || 'Variable'}`}</div>
-                  </div>
-                  <div className="text-right flex flex-col items-end">
-                    <div className={`font-bold text-sm ${doc.prix && doc.prix > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
-                      {doc.prix && doc.prix > 0 ? `${doc.prix} FCFA` : 'Gratuit'}
-                    </div>
-                    {docChoisi?.id === doc.id && <CheckCircle size={16} className="text-green-500 mt-1" />}
-                  </div>
-                </button>
-              ))}
-            </div>
-          );
-        })}
+      <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2">
+        <div>
+          <h2 className="text-lg font-bold text-[#0A2540] mb-1">{config.title}</h2>
+          <p className="text-xs text-gray-400">{config.intro}</p>
+        </div>
+        {isDevTestModeEnabled() && (
+          <button
+            type="button"
+            onClick={() => {
+              const profile = DEMO_PROFILE_BY_DOCUMENT[selectedDocument.id] ?? {};
+              const nextData = { ...formData, ...profile };
+              setFormData(nextData);
+              persistProfile(nextData);
+              const nextFiles: Record<string, File> = {};
+              config.attachments.forEach((attachment) => {
+                nextFiles[attachment.label] = new File(["test"], `${attachment.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`, { type: "application/pdf" });
+              });
+              setDocumentFiles(nextFiles);
+            }}
+            className="rounded-xl bg-[#0A2540] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.12em] text-white hover:bg-[#112d4f]"
+          >
+            Remplir test
+          </button>
+        )}
       </div>
-      {docChoisi && (
-        <div className="mt-4 border-t border-gray-100 pt-4">
-          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Nombre d'exemplaires</label>
-          <div className="flex items-center gap-2">
-            <Copy size={16} className="text-gray-400" />
-            <input
-              type="number"
-              value={nombreCopies}
-              onChange={e => setNombreCopies(Math.max(1, parseInt(e.target.value, 10) || 1))}
-              min="1"
-              className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
-            />
+
+      <div className="mb-6">
+        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-2">Demande pour</label>
+        <div className="space-y-2">
+          {beneficiaryOptions.map(option => (
+            <label key={option.value} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700 cursor-pointer hover:border-green-300 hover:bg-green-50">
+              <input
+                type="radio"
+                name="beneficiaryType"
+                checked={beneficiaryType === option.value}
+                onChange={() => setBeneficiaryType(option.value)}
+                className="h-4 w-4 accent-[#009A44]"
+              />
+              <span>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {config.fields.map((field) => (
+          <div key={field.key}>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">{field.label}</label>
+            {field.type === "textarea" ? (
+              <textarea
+                value={formData[field.key] ?? ""}
+                onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                placeholder={field.placeholder}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white min-h-[100px]"
+              />
+            ) : (
+              <input
+                type={field.type === "date" ? "date" : "text"}
+                value={formData[field.key] ?? ""}
+                onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                placeholder={field.placeholder}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white"
+              />
+            )}
           </div>
+        ))}
+      </div>
+
+      <div className="mt-6 space-y-4">
+        {config.attachments.map((attachment, index) => (
+          <UploadZone
+            key={`${attachment.label}-${index}`}
+            label={index === 0 ? identityLabel : attachment.label}
+            hint={attachment.required ? "📷 Caméra / 📄 Image ou PDF" : "Optionnel : caméra ou fichier"}
+            done={documentFiles[attachment.label]?.name || null}
+            onFile={(e) => {
+              const selectedFile = e.target.files?.[0] ?? null;
+              handleAttachmentChange(attachment.label, selectedFile);
+              if (e.target) e.target.value = "";
+            }}
+          />
+        ))}
+      </div>
+
+      {config.note && (
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {config.note}
         </div>
       )}
-      <button onClick={() => setEtape(docChoisi?.deliveryOptions && docChoisi.deliveryOptions.length > 0 ? etapeChoixDelivranceIndex : etapeInformationsIndex)} disabled={!docChoisi || !mairie}
-        className="mt-6 w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
+
+      <button
+        onClick={onComplete}
+        disabled={!canContinue}
+        className="mt-8 w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm"
+      >
         Continuer →
       </button>
     </div>
   );
 }
 
-// --- NOUVELLE ÉTAPE : CHOIX DU MODE DE DÉLIVRANCE ---
-function Etape_ChoixDelivrance({ setEtape, docChoisi, selectedDeliveryOption, setSelectedDeliveryOption, etapeInformationsIndex, etapePiecesIndex }: StepSpecificProps<{ etapeInformationsIndex: number, etapePiecesIndex: number }>) {
-  const nextStep = (docChoisi?.formFields && docChoisi.formFields.length > 0)
-    ? etapeInformationsIndex
-    : (docChoisi?.justificatifs && docChoisi.justificatifs.length > 0 ? etapePiecesIndex : etapeInformationsIndex + 1); // Fallback to next logical step
-
+function PaymentOption({ icon, title, description, isSelected, onClick }: {
+  icon: string;
+  title: string;
+  description: string;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div>
-      <h2 className="text-lg font-bold text-[#0A2540] mb-1">Choisissez le format de délivrance</h2>
-      <p className="text-xs text-gray-400 mb-5">Sélectionnez comment vous souhaitez recevoir votre document.</p>
-
-      <div className="space-y-4">
-        {docChoisi?.deliveryOptions?.map(option => (
-          <button
-            key={option.format}
-            onClick={() => setSelectedDeliveryOption(option)}
-            className={`w-full text-left border-2 rounded-xl p-4 transition-all flex items-center justify-between
-              ${selectedDeliveryOption?.format === option.format ? "border-[#009A44] bg-green-50" : "border-gray-100 hover:border-gray-200"}`}
-          >
-            <div>
-              <div className="font-semibold text-sm text-[#0A2540]">{option.label}</div>
-              <div className="text-xs text-gray-400 mt-0.5">{option.description}</div>
-            </div>
-            <div className="text-right flex flex-col items-end">
-              <div className={`font-bold text-sm ${option.prix > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
-                {option.prix > 0 ? `${option.prix} FCFA` : 'Gratuit'}
-              </div>
-              {selectedDeliveryOption?.format === option.format && <CheckCircle size={16} className="text-green-500 mt-1" />}
-            </div>
-          </button>
-        ))}
+    <button
+      onClick={onClick}
+      className={`w-full text-left border-2 rounded-xl p-5 transition-all flex items-start gap-4
+        ${isSelected ? "border-[#009A44] bg-green-50 ring-2 ring-green-200" : "border-gray-200 bg-white hover:border-gray-300"}`}
+    >
+      <span className="text-3xl mt-1">{icon}</span>
+      <div>
+        <div className="font-semibold text-base text-[#0A2540]">{title}</div>
+        <p className="text-xs text-gray-500 mt-0.5">{description}</p>
       </div>
-
-      <div className="flex gap-3 mt-6">
-        <button onClick={() => setEtape(0)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
-          <ArrowLeft size={14} /> Retour
-        </button>
-        <button
-          onClick={() => setEtape(nextStep)}
-          disabled={!selectedDeliveryOption}
-          className="flex-1 py-3 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm"
-        >
-          Continuer →
-        </button>
-      </div>
-    </div>
+      {isSelected && <CheckCircle size={20} className="text-green-500 ml-auto flex-shrink-0 mt-1" />}
+    </button>
   );
 }
 
-// --- ÉTAPE 1 : INFORMATIONS PERSONNELLES ---
-function Etape1_InformationsPersonnelles({ setEtape, docChoisi, form, setForm, etapeChoixDelivranceIndex, etapePiecesIndex, etapeConfirmationIndex }: StepSpecificProps<{ etapePiecesIndex: number, etapeConfirmationIndex: number }>) {
-  const fieldsToRender = docChoisi?.formFields || docChoisi?.workflow?.[0]?.formFields || [];
-  const previousStep = (docChoisi?.deliveryOptions && docChoisi.deliveryOptions.length > 0) ? etapeChoixDelivranceIndex : 0;
-  const nextStep = (docChoisi?.justificatifs && docChoisi.justificatifs.length > 0)
-    ? etapePiecesIndex
-    : etapeConfirmationIndex;
+function Etape4_Justificatifs({ file, setFile, onBack, onComplete }: {
+  file: File | null;
+  setFile: (file: File | null) => void;
+  onBack: () => void;
+  onComplete: () => void;
+}) {
+  const [preview, setPreview] = useState<string | null>(null);
 
-  return (
-    <div>
-      <h2 className="text-lg font-bold text-[#0A2540] mb-1">Vos informations</h2>
-      <p className="text-xs text-gray-400 mb-5">Saisissez exactement vos informations telles qu'elles figurent sur votre CNI.</p>
-      <DynamicForm fields={fieldsToRender} form={form} setForm={setForm} />
-      <div className="flex gap-3 mt-6">
-        <button onClick={() => setEtape(previousStep)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
-          <ArrowLeft size={14} /> Retour
-        </button>
-        <button onClick={() => setEtape(nextStep)} disabled={!form.nom || !form.prenom || !form.dateNaissance}
-          className="flex-1 py-3 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
-          Continuer →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// --- ÉTAPE 2 : PIÈCES JUSTIFICATIVES ---
-function Etape2_PiecesJustificatives({ setEtape, docChoisi, form, reference, fichiers, setFichiers, heberge, setHeberge, etapeInformationsIndex, etapePaiementIndex, etapeConfirmationIndex, etapeChoixDelivranceIndex }: StepSpecificProps<{ etapeInformationsIndex: number, etapePaiementIndex: number, etapeConfirmationIndex: number }>) {
-  const setFichier = (k: keyof FichiersData) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) setFichiers({ ...fichiers, [k]: f.name });
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      if (selectedFile.type.startsWith("image/")) {
+        setPreview(URL.createObjectURL(selectedFile));
+      } else {
+        setPreview(null); // No preview for non-image files like PDF
+      }
+    }
   };
 
-  const justificatifsToRender: JustificatifConfig[] = docChoisi?.justificatifs || docChoisi?.workflow?.find(s => s.type === 'upload_justificatifs')?.justificatifs || [];
-  const previousStep = (docChoisi?.formFields && docChoisi.formFields.length > 0) ? etapeInformationsIndex : (docChoisi?.deliveryOptions && docChoisi.deliveryOptions.length > 0 ? etapeChoixDelivranceIndex : 0);
-  const nextStep = etapePaiementIndex !== -1 ? etapePaiementIndex : etapeConfirmationIndex;
+  const resetFile = () => {
+    setFile(null);
+    setPreview(null);
+  };
 
   return (
     <div>
-      <h2 className="text-lg font-bold text-[#0A2540] mb-1">Pièces justificatives</h2>
-      <p className="text-xs text-gray-400 mb-5">Photos nettes acceptées. L'agent vérifiera les originaux au guichet.</p>
-
-      <div className="space-y-4 mb-5">
-        {justificatifsToRender.map((justificatif, index) => (
-          <UploadZone key={index} label={justificatif.label} hint={justificatif.description || `Téléchargez votre ${justificatif.label.toLowerCase()}`} done={fichiers[justificatif.label as keyof FichiersData]} onFile={setFichier(justificatif.label as keyof FichiersData)} />
-        ))}
-      </div>
-
-      {docChoisi?.id === 'certificat_residence' && (
-        <div className="space-y-4 mb-5">
-          <div className="border border-amber-200 bg-amber-50 rounded-xl p-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" className="h-4 w-4 accent-amber-600" />
-              <span className="text-sm font-semibold text-amber-800">Parents mariés ?</span>
-            </label>
-            <div className="mt-3 pl-7"><UploadZone label="Livret de famille ou Acte de mariage" hint="Si applicable" done={fichiers.livretFamille} onFile={setFichier("livretFamille")} /></div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex gap-3 mt-6">
-        <button onClick={() => setEtape(previousStep)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
-          <ArrowLeft size={14} /> Retour
-        </button>
-        <button onClick={() => {
-          setEtape(nextStep);
-        }} disabled={!fichiers.cni || !fichiers.domicile}
-          className="flex-1 py-3 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
-          Continuer →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// --- ÉTAPE 3 : PAIEMENT ---
-function Etape3_Paiement({ setEtape, docChoisi, form, mairie, nombreCopies, paiement, setPaiement, reference, selectedDeliveryOption, etapePiecesIndex, etapeConfirmationIndex }: StepSpecificProps<{ etapePiecesIndex: number, etapeConfirmationIndex: number }>) {
-  const totalAPayer = (docChoisi?.prix || 0) * nombreCopies + (selectedDeliveryOption?.prix || 0);
-
-  return (
-    <div data-statut="PAIEMENT_EN_ATTENTE">
-      <h2 className="text-lg font-bold text-[#0A2540] mb-1">Paiement des droits</h2>
-      <p className="text-xs text-gray-400 mb-5">Le paiement sécurise votre dossier et génère votre QR code de passage au guichet.</p>
-
-      <div className="bg-muted/40 rounded-xl p-4 mb-5">
-        <div className="text-xs text-gray-500 mb-3 font-semibold uppercase tracking-wide">Récapitulatif de votre demande</div>
-        <div className="space-y-1.5">
-          {[
-            ["Document", docChoisi?.label],
-            ["Mairie", mairie],
-            ["Demandeur", `${form.nom} ${form.prenom}`],
-            ["Option de délivrance", selectedDeliveryOption?.label || "N/A"],
-            ["Exemplaires", `${nombreCopies} (avec QR codes uniques)`],
-            ["Téléphone", form.telephone || "—"],
-          ].map(([k, v]) => (
-            <div key={k as string} className="flex justify-between text-sm">
-              <span className="text-gray-400">{k}</span>
-              <span className="font-medium text-[#0A2540] text-right max-w-[200px]">{v}</span>
-            </div>
-          ))}
-        </div>
-        <div className="border-t border-gray-200 mt-3 pt-3 flex justify-between items-center">
-          <div className="text-sm">
-            <div className="text-gray-500 font-semibold">Total à payer</div>
-          </div>
-          <div className="text-right">
-            <div className="text-xl font-extrabold text-primary">
-              {totalAPayer} FCFA
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Mode de paiement</div>
-      <div className="grid grid-cols-2 gap-3 mb-5">
-        {[
-          { id: "wave", label: "Wave", emoji: "🌊" },
-          { id: "orange", label: "Orange Money", emoji: "🟠" },
-          { id: "mtn", label: "MTN MoMo", emoji: "💛" },
-          { id: "carte", label: "Carte bancaire", emoji: "💳" },
-        ].map(opt => (
-          <button key={opt.id} onClick={() => setPaiement(opt.id)}
-            className={`border-2 rounded-xl p-3 text-center transition-all
-              ${paiement === opt.id ? "border-[#009A44] bg-green-50" : "border-gray-100 hover:border-gray-200"}`}>
-            <div className="text-2xl mb-1">{opt.emoji}</div>
-            <div className="text-xs font-bold text-[#0A2540]">{opt.label}</div>
-            {paiement === opt.id && <CheckCircle size={14} className="text-green-500 mx-auto mt-1" />}
-          </button>
-        ))}
-      </div>
-
-      {paiement !== "carte" && (
-        <div className="mb-5">
-          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Numéro {paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : "MTN MoMo"}</label>
-          <input defaultValue={form.telephone} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white" placeholder="07 XX XX XX XX" />
-          <p className="text-xs text-gray-400 mt-1.5">Vous recevrez une demande de paiement sur ce numéro</p>
-        </div>
-      )}
-
-      <div className="flex gap-3">
-        <button onClick={() => setEtape(etapePiecesIndex)} className="px-5 py-3 border border-gray-200 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2">
-          <ArrowLeft size={14} /> Retour
-        </button>
-        <button onClick={() => {
-          if (docChoisi && selectedDeliveryOption) {
-            addDossierToQueue({ id: reference, nom: `${form.nom} ${form.prenom}`, doc: docChoisi.id, paymentMethod: "digital", deliveryMethod: "sur_place" }); // Simplified for now
-          }
-          setEtape(etapeConfirmationIndex);
-        }}
-          className="flex-1 py-3 bg-[#F77F00] text-white font-bold rounded-xl hover:bg-orange-600 transition-colors text-sm"
-        >
-          Payer {totalAPayer} FCFA via {paiement === "wave" ? "Wave" : paiement === "orange" ? "Orange Money" : paiement === "mtn" ? "MTN" : "Carte bancaire"} →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// --- ÉTAPE 4 : RÉCUPÉRATION / QR CODE ---
-function Etape
-    return (
-      <div className="text-center" data-statut="EN_ATTENTE_GUICHET">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <CheckCircle size={32} className="text-green-600" />
-        </div>
-        <h2 className="text-xl font-extrabold text-[#0A2540] mb-1">Pré-demande enregistrée !</h2>
-        <p className="text-sm text-gray-400 mb-6">
-          {docChoisi && docChoisi.prix * nombreCopies > 0
-            ? `Paiement de ${docChoisi.prix * nombreCopies} FCFA à effectuer au guichet.`
-            : "Ce document est gratuit."
-          }
-          {" · Présentez ce QR code en mairie."}
-        </p>
-
-        <div className="flex justify-center mb-4">
-          <QRCodeDisplay reference={reference} />
-        </div>
-        <div className="font-mono text-sm text-gray-500 mb-1">{reference}</div>
-        <div className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
-          ⏳ En attente validation au guichet
-        </div>
-
-        <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 text-left mb-5">
-          <div className="flex items-start gap-3">
-            <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <div className="text-sm font-semibold text-amber-800">Important : N'oubliez pas vos originaux !</div>
-              <div className="text-xs text-amber-700 mt-1">Pour finaliser votre demande, l'agent au guichet devra comparer les documents originaux (CNI, justificatif de domicile, etc.) avec les copies que vous avez envoyées.</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-muted/40 rounded-xl p-4 text-left mb-5">
-          <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Votre dossier</div>
-          <div className="space-y-1.5">
-            {[
-              ["Document", docChoisi?.label],
-              ["Mairie", mairie],
-              ["Demandeur", `${form.nom} ${form.prenom}`],
-              ["Paiement", `À régler au guichet (${(docChoisi?.prix ?? 0) * nombreCopies} FCFA)`],
-              ["Délai estimé", docChoisi?.delai + " au guichet"],
-            ].map(([k, v]) => (
-              <div key={k as string} className="flex justify-between text-sm">
-                <span className="text-gray-400">{k}</span>
-                <span className="font-medium text-[#0A2540]">{v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-6 space-y-3">
-          <button
-            onClick={() => {
-              alert("Dossier annulé.");
-              setEtape(0);
-              setDocChoisi(null);
-            }}
-            className="w-full py-2 border-2 border-red-100 text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-200 font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors">
-            🗑️ Annuler ma demande
-          </button>
-          <button className="w-full py-3 bg-[#0A2540] text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2">
-            <QrCode size={16} /> Télécharger le QR Code
-          </button>
-        </div>
-
-        <div className="mt-6 border-t border-dashed pt-6 text-center">
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Après validation par l'agent...
-          </div>
-          <div className="mt-3 rounded-lg border border-success/30 bg-success/5 p-4 text-left">
-            <div className="font-semibold text-success mb-3">🎉 Notification : Votre document est prêt !</div>
-            
-            {/* Choix de récupération pour l'utilisateur */}
-            <div className="space-y-3">
-              <button
-                onClick={() => {
-                  alert("Simulation du paiement pour la légalisation.\nLe document final certifié serait maintenant téléchargé.");
-                  // if (docChoisi) generateAndDownloadPdf(docChoisi, form, reference, nombreCopies);
-                }}
-                className="w-full text-left border-2 border-primary bg-primary/5 rounded-xl p-4 transition-all flex items-start gap-4"
-              >
-                <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-foreground flex-shrink-0">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="font-semibold text-sm text-primary">Légaliser et Télécharger le PDF (+ 500 FCFA)</div>
-                  <div className="text-xs text-primary/80 mt-0.5">Obtenez la version numérique officielle, infalsifiable.</div>
-                </div>
-              </button>
-              <button onClick={() => {
-                alert("Votre demande de retrait en mairie a été enregistrée.");
-                navigate({ to: "/" });
-              }}
-                className="w-full text-left border-2 border-gray-100 hover:border-gray-200 rounded-xl p-4 transition-all flex items-start gap-4">
-                <div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground flex-shrink-0">
-                  <Building size={20} />
-                </div>
-                <div>
-                  <div className="font-semibold text-sm text-foreground">Retirer le document papier à la mairie</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">Le document sera déjà légalisé par l'officier.</div>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Circuit Court (document simple avec paiement en ligne) ---
-  return (
-    <div className="text-center">
-      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <CheckCircle size={32} className="text-green-600" />
-      </div>
-      <h2 className="text-xl font-extrabold text-[#0A2540] mb-1">Demande validée !</h2>
-      <p className="text-sm text-gray-400 mb-6">Paiement confirmé. Votre document est prêt.</p>
+      <button onClick={onBack} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6">
+        <ArrowLeft size={16} /> Retour aux informations
+      </button>
+      <h2 className="text-lg font-bold text-[#0A2540] mb-1">Pièce justificative</h2>
+      <p className="text-xs text-gray-400 mb-6">Fournissez une photo ou un scan de votre pièce d'identité (CNI, passeport...).</p>
 
       <div className="space-y-4">
-        {/* Option 1: Télécharger le document NON légalisé */}
-        <button
-          onClick={() => {
-            alert("Téléchargement du document non-légalisé...");
-          }}
-          className="w-full text-left border-2 border-gray-200 bg-muted/30 rounded-xl p-4 transition-all flex items-start gap-4 hover:bg-muted/60"
-        >
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground flex-shrink-0">
-            <Download size={20} />
-          </div>
-          <div>
-            <div className="font-semibold text-sm text-foreground">Télécharger le document (non-légalisé)</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Pour consultation personnelle ou archivage. Un filigrane "Spécimen" sera appliqué.</div>
-          </div>
-        </button>
+        {/* Option 1: Prendre une photo */}
+        <label className="w-full text-center cursor-pointer rounded-xl border-2 border-dashed border-gray-300 p-6 flex flex-col items-center justify-center hover:bg-gray-50">
+          <Camera size={24} className="text-gray-400 mb-2" />
+          <span className="font-semibold text-sm text-gray-700">Prendre une photo / Scanner</span>
+          <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
+        </label>
 
-        {/* Option 2: Légaliser et télécharger */}
-        <button
-          onClick={() => {
-            alert("Simulation du paiement pour la légalisation.\nLe document final certifié serait maintenant téléchargé.");
-            // Ici, on lancerait le paiement du timbre, puis le téléchargement du PDF final.
-          }}
-          className="w-full text-left border-2 border-primary bg-primary/5 rounded-xl p-4 transition-all flex items-start gap-4"
-        >
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-foreground flex-shrink-0">
-            <ShieldCheck className="h-5 w-5" /> {/* Icône de sécurité */}
-          </div>
-          <div>
-            <div className="font-semibold text-sm text-primary">Légaliser ce document (+ {selectedDeliveryOption.prix} FCFA)</div>
-            <div className="text-xs text-primary/80 mt-0.5">Payez le timbre numérique pour obtenir le PDF officiel avec sceau et QR code de vérification.</div>
-          </div>
-        </button>
+        {/* Option 2: Importer un fichier */}
+        <UploadZone
+          label="Ou importer un document"
+          hint="Importer un fichier (PDF / JPG / PNG)"
+          done={file?.name || null}
+          onFile={handleFileChange}
+        />
 
-        <button onClick={() => {
-          alert("Votre demande de retrait en mairie a été enregistrée.");
-          navigate({ to: "/" });
-        }}
-          className="w-full text-left border-2 border-gray-100 hover:border-gray-200 rounded-xl p-4 transition-all flex items-start gap-4">
-          <div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground flex-shrink-0">
-            <Building size={20} />
+        {/* Aperçu ou info fichier */}
+        {file && (
+          <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
+            {preview && <img src={preview} alt="Aperçu" className="w-16 h-12 object-cover rounded-md" />}
+            <div className="text-xs flex-1 mx-3">
+              <p className="font-semibold text-gray-800 truncate">{file.name}</p>
+              <p className="text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
+            </div>
+            <button onClick={resetFile} className="text-xs text-red-600 hover:underline">Supprimer</button>
           </div>
-          <div>
-            <div className="font-semibold text-sm text-foreground">Voie Classique</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Retirez le document papier déjà certifié à la mairie.</div>
-          </div>
-        </button>
+        )}
       </div>
 
-      <div className="mt-6">
-        <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-primary">
-          Retourner à l'accueil
-        </Link>
-      </div>
+      <button onClick={onComplete} disabled={!file} className="mt-8 w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
+        Continuer →
+      </button>
     </div>
   );
 }

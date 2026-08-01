@@ -137,6 +137,24 @@ function MonEspace() {
           </button>
         </div>
 
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Profil</div>
+            <div className="mt-2 font-display text-xl font-bold text-foreground">{profile?.first_name ?? "CITOYEN"} {profile?.last_name ?? ""}</div>
+            <div className="mt-1 text-sm text-muted-foreground">CNI / NNI enregistré</div>
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Dossiers actifs</div>
+            <div className="mt-2 font-display text-xl font-bold text-foreground">{requestsQuery.data?.length ?? 0}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Pré-demandes en cours</div>
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground">QR</div>
+            <div className="mt-2 font-display text-xl font-bold text-foreground">Toujours accessible</div>
+            <div className="mt-1 text-sm text-muted-foreground">À présenter au guichet</div>
+          </div>
+        </div>
+
         {showForm && (
           <NewRequestForm
             defaultFirstName={profile?.first_name ?? ""}
@@ -173,6 +191,12 @@ function MonEspace() {
                       <div className="text-xs text-muted-foreground">
                         Réf. {r.reference} · {r.commune} ·{" "}
                         {new Date(r.created_at).toLocaleDateString("fr-FR")}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {r.status === "en_attente_paiement" && "Validation du paiement et des pièces en cours."}
+                        {r.status === "en_verification" && "Votre dossier est vérifié au guichet. En attente de validation du maire."}
+                        {r.status === "en_attente_signature" && "Le maire a approuvé le dossier. Signature numérique en cours."}
+                        {(r.status === "signe" || r.status === "delivre") && "Document validé et signé. Préparez votre retrait à la mairie."}
                       </div>
                     </div>
                   </div>

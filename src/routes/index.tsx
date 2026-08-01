@@ -228,13 +228,12 @@ function Interfaces() {
   return (
     <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
       <div className="max-w-2xl">
-        <div className="text-sm font-semibold uppercase tracking-wider text-primary">3 interfaces</div>
+        <div className="text-sm font-semibold uppercase tracking-wider text-primary">3 circuits</div>
         <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-          Une plateforme, trois métiers.
+          Une plateforme, trois parcours métiers.
         </h2>
         <p className="mt-3 text-muted-foreground">
-          Chaque acteur travaille dans un environnement pensé pour son rôle — et
-          les données circulent automatiquement de l'un à l'autre.
+          Type A : guichet physique mandaté par la mairie. Type B : validation numérique par agent. Type C : eCitizen souverain pour CNI, passeport et grands titres biométriques.
         </p>
       </div>
       <div className="mt-10 grid gap-5 md:grid-cols-3">
@@ -262,10 +261,10 @@ function Interfaces() {
 
 function Flow() {
   const steps = [
-    { n: "01", t: "Le citoyen remplit", d: "Formulaire mobile, upload CNI + facture, paiement Mobile Money." },
-    { n: "02", t: "Le système génère", d: "QR code de dossier, OCR pré-analyse, données prêtes." },
-    { n: "03", t: "L'agent valide", d: "Scan QR au guichet, comparaison OCR, checklist de conformité." },
-    { n: "04", t: "L'officier signe", d: "Signature numérique, PDF/A avec QR d'authenticité, envoi WhatsApp." },
+    { n: "A", t: "Type A · Présentiel", d: "Pré-demande + QR + validation physique au guichet par l'agent municipal." },
+    { n: "B", t: "Type B · Numérique", d: "Demande en ligne, contrôle par agent, paiement Mobile Money et timbre numérique." },
+    { n: "C", t: "Type C · eCitizen", d: "Pré-enrôlement biométrique, centre agréé, rendez-vous et titres souverains nationaux." },
+    { n: "04", t: "L'officier signe", d: "Signature numérique, PDF/A avec QR d'authenticité, envoi WhatsApp ou retrait physique." },
   ];
   return (
     <section className="bg-muted/40 py-20">

@@ -16,6 +16,7 @@ import {
 import { SiteHeader } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteFooter } from "@/components/site-footer";
+import { isRoleBypassEnabled } from "@/lib/role-guard";
 
 export const Route = createFileRoute("/officier")({
   head: () => ({
@@ -37,18 +38,23 @@ export const Route = createFileRoute("/officier")({
   // --- Sécurisation de la route ---
   beforeLoad: async ({ location }) => {
     const { data } = await supabase.auth.getSession();
-    // Si l'utilisateur n'est pas connecté, on le redirige vers la page de connexion.
     if (!data.session) {
       throw redirect({
         to: "/auth",
         search: {
-          // Après connexion, il sera redirigé vers la page qu'il tentait d'accéder.
           redirect: location.href,
         },
       });
     }
-    // NOTE: En production, on vérifierait ici si l'utilisateur a bien le rôle "officier"
-    // et si son compte a été validé par un administrateur.
+
+    if (isRoleBypassEnabled()) {
+      return;
+    }
+
+    const userRole = data.session.user?.user_metadata?.role;
+    if (userRole !== "OFFICIER") {
+      throw redirect({ to: "/citoyen" });
+    }
   },
   component: OfficierPage,
 });
