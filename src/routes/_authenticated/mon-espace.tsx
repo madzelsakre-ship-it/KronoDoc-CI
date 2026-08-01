@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, useNavigate, Link, redirect } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
   FileText,
   Loader2,
@@ -13,26 +13,19 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Route as AuthenticatedRoute } from "../_authenticated/route";
 
 export const Route = createFileRoute("/_authenticated/mon-espace")({
-  head: () => ({
-    meta: [
-      { title: "Mon espace citoyen — KronoDoc CI" },
-      {
-        name: "description",
-        content:
-          "Suivez l'état de vos demandes d'actes d'état civil et récupérez vos documents signés avec QR d'authenticité.",
-      },
-      { property: "og:title", content: "Mon espace citoyen — KronoDoc CI" },
-      {
-        property: "og:description",
-        content: "Vos demandes, leur statut et vos documents signés au même endroit.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
+  // La vérification est déjà faite par la route parente `_authenticated`.
+  // Nous n'avons plus besoin de `beforeLoad` ici.
   component: MonEspace,
+  loader: async ({ context }) => {
+    // On récupère le profil et les requêtes ici, avant le rendu du composant.
+    // TanStack Router attendra que ces promesses soient résolues.
+    const profile = context.queryClient.ensureQueryData(profileQueryOptions);
+    const requests = context.queryClient.ensureQueryData(requestsQueryOptions);
+    return { profile, requests };
+  }
 });
 
 const DOC_LABELS: Record<string, string> = {
@@ -55,38 +48,44 @@ const STATUS_LABELS: Record<string, string> = {
   rejete: "Rejeté",
 };
 
+const profileQueryOptions = {
+  queryKey: ["profile"],
+  queryFn: async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new Error("Utilisateur non authentifié");
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("first_name, last_name, phone, commune")
+      .eq("id", auth.user.id)
+      .single();
+    if (error) throw error;
+    return { ...data, email: auth.user.email };
+  },
+};
+
+const requestsQueryOptions = {
+  queryKey: ["my-requests"],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("document_requests")
+      .select(
+        "id, reference, verification_code, doc_type, status, commune, created_at, signed_at",
+      )
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+};
+
 function MonEspace() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
 
-  const { data: profile } = useQuery({
-    queryKey: ["profile"],
-    queryFn: async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return null;
-      const { data } = await supabase
-        .from("profiles")
-        .select("first_name, last_name, phone, commune")
-        .eq("id", auth.user.id)
-        .maybeSingle();
-      return { ...data, email: auth.user.email };
-    },
-  });
-
-  const requestsQuery = useQuery({
-    queryKey: ["my-requests"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("document_requests")
-        .select(
-          "id, reference, verification_code, doc_type, status, commune, created_at, signed_at",
-        )
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  // On utilise `useSuspenseQuery` qui fonctionne avec le `loader` de la route.
+  // Les données sont déjà chargées, donc pas d'état de chargement à gérer ici.
+  const { data: profile } = useSuspenseQuery(profileQueryOptions);
+  const { data: requests } = useSuspenseQuery(requestsQueryOptions);
 
   async function handleSignOut() {
     await queryClient.cancelQueries();
@@ -145,7 +144,7 @@ function MonEspace() {
           </div>
           <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="text-xs uppercase tracking-[0.12em] text-muted-foreground">Dossiers actifs</div>
-            <div className="mt-2 font-display text-xl font-bold text-foreground">{requestsQuery.data?.length ?? 0}</div>
+            <div className="mt-2 font-display text-xl font-bold text-foreground">{requests?.length ?? 0}</div>
             <div className="mt-1 text-sm text-muted-foreground">Pré-demandes en cours</div>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -169,13 +168,9 @@ function MonEspace() {
 
         <section className="mt-8">
           <h2 className="font-display text-lg font-bold text-foreground">Mes demandes</h2>
-          {requestsQuery.isLoading ? (
-            <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
-            </div>
-          ) : requestsQuery.data && requestsQuery.data.length > 0 ? (
+          {requests && requests.length > 0 ? (
             <ul className="mt-4 space-y-3">
-              {requestsQuery.data.map((r) => (
+              {requests.map((r) => (
                 <li
                   key={r.id}
                   className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-4 shadow-sm"

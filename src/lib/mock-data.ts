@@ -68,7 +68,6 @@ export type DocumentRecognition = {
   status: "reconnu" | "verification" | "souverain";
 };
 
-export type PaymentMethod = "physique" | "digital";
 export type PaymentStatus = "non_paye" | "paye";
 export type DeliveryMethod = "sur_place" | "a_domicile";
 
@@ -385,10 +384,6 @@ export function recognizeDocument(doc: DocumentType): DocumentRecognition {
     }
   );
 }
-
-export type PaymentMethod = "physique" | "digital";
-export type PaymentStatus = "non_paye" | "paye";
-export type DeliveryMethod = "sur_place" | "a_domicile";
 
 export interface Dossier {
   id: string;

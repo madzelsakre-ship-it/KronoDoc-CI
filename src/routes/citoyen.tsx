@@ -19,7 +19,7 @@ import { ShieldCheck } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { useSession } from "@/hooks/use-session";
-import { supabase } from "@/integrations/supabase/client";
+import { PaymentMethod, getUserById } from "@/lib/mock-data"; // Assumons que c'est la bonne façon de récupérer le profil
 import { isDevTestModeEnabled, setDevTestMode } from "@/lib/test-mode";
 import { canAccessRoute, getUserRole } from "@/lib/role-guard";
 
@@ -35,7 +35,6 @@ export const Route = createFileRoute("/citoyen")({
   }),
   beforeLoad: async ({ location }) => {
     const { data } = await supabase.auth.getSession();
-    const role = getUserRole(data.session?.user ?? null);
 
     if (!data.session) {
       throw redirect({
@@ -43,6 +42,9 @@ export const Route = createFileRoute("/citoyen")({
         search: { redirect: location.href },
       });
     }
+
+    // On appelle getUserRole SEULEMENT si la session existe.
+    const role = getUserRole(data.session.user);
 
     if (!canAccessRoute(role, "/citoyen")) {
       throw redirect({ to: "/agent" });
@@ -407,8 +409,6 @@ type DocumentItem = {
   time: string;
   price: string;
 };
-
-type PaymentMethod = 'physique' | 'digital' | null;
 
 const PROFILE_STORAGE_KEY = "kronodoc_profile_v1";
 const PROFILE_KEYS = new Set([
