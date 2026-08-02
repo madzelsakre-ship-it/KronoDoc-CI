@@ -783,6 +783,7 @@ function CitoyenPage() {
                           done={legalisationFile?.name || null}
                           onFile={(e) => e.target.files && setLegalisationFile(e.target.files[0])}
                         />
+
                         {legalisationFile && (
                           <div>
                             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide block mb-1.5">Nombre de copies</label>
@@ -799,6 +800,14 @@ function CitoyenPage() {
                             <p className="text-sm text-gray-500 mt-2">Total à payer : <span className="font-bold text-orange-600">{legalisationCopies * 500} FCFA</span></p>
                           </div>
                         )}
+
+                        <button
+                          onClick={handleSelectLegalisation}
+                          disabled={!legalisationFile || !selectedEntity}
+                          className="mt-8 w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm"
+                        >
+                          Continuer →
+                        </button>
                       </div>
                     ) : (
                       /* Liste des documents pour les autres catégories */
@@ -848,8 +857,8 @@ function CitoyenPage() {
 
             {/* ÉTAPE 4 : CHOIX DU PAIEMENT */}
             {step === 4 && (
-              <div>
-                <button onClick={() => setStep(4)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6">
+              <div className>
+                <button onClick={() => setStep(3)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6">
                   <ArrowLeft size={16} /> Retour aux informations
                 </button>
                 <h2 className="text-lg font-bold text-[#0A2540] mb-1">Mode de règlement</h2>
@@ -969,9 +978,15 @@ function Etape3_InformationsEtJustificatif({
     { value: "for_third_party", label: "Pour un tiers" },
   ] as const;
 
-  const requiredFieldsMissing = config.fields.some(field => field.required !== false && !String(formData[field.key] ?? "").trim());
-  const requiredFilesMissing = config.attachments.some(attachment => attachment.required && !documentFiles[attachment.label]);
-  const canContinue = isDevTestModeEnabled() || (!requiredFieldsMissing && !requiredFilesMissing);
+  // On vérifie si le mode test est activé.
+  // Ce mode est activé via le bouton "Utiliser le compte de test" sur la page de connexion.
+  const isBypassActive = isDevTestModeEnabled();
+
+  // Si le mode test n'est PAS actif, on applique les règles de validation strictes.
+  const requiredFieldsMissing = !isBypassActive && config.fields.some(field => field.required !== false && !String(formData[field.key] ?? "").trim());
+  const requiredFilesMissing = !isBypassActive && config.attachments.some(attachment => attachment.required && !documentFiles[attachment.label]);
+  
+  const canContinue = isBypassActive || (!requiredFieldsMissing && !requiredFilesMissing);
 
   return (
     <div>
@@ -1069,6 +1084,28 @@ function Etape3_InformationsEtJustificatif({
         </div>
       )}
 
+      {/* Bouton "Remplir test" déplacé en bas */}
+      {isDevTestModeEnabled() && (
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              const profile = DEMO_PROFILE_BY_DOCUMENT[selectedDocument.id] ?? {};
+              const nextData = { ...formData, ...profile };
+              setFormData(nextData);
+              persistProfile(nextData);
+              const nextFiles: Record<string, File> = {};
+              config.attachments.forEach((attachment) => {
+                nextFiles[attachment.label] = new File(["test"], `${attachment.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.pdf`, { type: "application/pdf" });
+              });
+              setDocumentFiles(nextFiles);
+            }}
+            className="inline-flex items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+          >
+            Remplir le formulaire avec des données de test
+          </button>
+        </div>
+      )}
       <button
         onClick={onComplete}
         disabled={!canContinue}
@@ -1100,74 +1137,5 @@ function PaymentOption({ icon, title, description, isSelected, onClick }: {
       </div>
       {isSelected && <CheckCircle size={20} className="text-green-500 ml-auto flex-shrink-0 mt-1" />}
     </button>
-  );
-}
-
-function Etape4_Justificatifs({ file, setFile, onBack, onComplete }: {
-  file: File | null;
-  setFile: (file: File | null) => void;
-  onBack: () => void;
-  onComplete: () => void;
-}) {
-  const [preview, setPreview] = useState<string | null>(null);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      if (selectedFile.type.startsWith("image/")) {
-        setPreview(URL.createObjectURL(selectedFile));
-      } else {
-        setPreview(null); // No preview for non-image files like PDF
-      }
-    }
-  };
-
-  const resetFile = () => {
-    setFile(null);
-    setPreview(null);
-  };
-
-  return (
-    <div>
-      <button onClick={onBack} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 mb-6">
-        <ArrowLeft size={16} /> Retour aux informations
-      </button>
-      <h2 className="text-lg font-bold text-[#0A2540] mb-1">Pièce justificative</h2>
-      <p className="text-xs text-gray-400 mb-6">Fournissez une photo ou un scan de votre pièce d'identité (CNI, passeport...).</p>
-
-      <div className="space-y-4">
-        {/* Option 1: Prendre une photo */}
-        <label className="w-full text-center cursor-pointer rounded-xl border-2 border-dashed border-gray-300 p-6 flex flex-col items-center justify-center hover:bg-gray-50">
-          <Camera size={24} className="text-gray-400 mb-2" />
-          <span className="font-semibold text-sm text-gray-700">Prendre une photo / Scanner</span>
-          <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
-        </label>
-
-        {/* Option 2: Importer un fichier */}
-        <UploadZone
-          label="Ou importer un document"
-          hint="Importer un fichier (PDF / JPG / PNG)"
-          done={file?.name || null}
-          onFile={handleFileChange}
-        />
-
-        {/* Aperçu ou info fichier */}
-        {file && (
-          <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-between">
-            {preview && <img src={preview} alt="Aperçu" className="w-16 h-12 object-cover rounded-md" />}
-            <div className="text-xs flex-1 mx-3">
-              <p className="font-semibold text-gray-800 truncate">{file.name}</p>
-              <p className="text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
-            </div>
-            <button onClick={resetFile} className="text-xs text-red-600 hover:underline">Supprimer</button>
-          </div>
-        )}
-      </div>
-
-      <button onClick={onComplete} disabled={!file} className="mt-8 w-full py-3.5 bg-[#009A44] text-white font-bold rounded-xl disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition-colors text-sm">
-        Continuer →
-      </button>
-    </div>
   );
 }

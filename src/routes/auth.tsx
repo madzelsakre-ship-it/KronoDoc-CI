@@ -89,7 +89,8 @@ function AuthPage() {
     setError(null);
     setLoading(true);
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+      // Utilise une URL de redirection explicite et stable
+      redirect_uri: `${window.location.origin}/auth/callback`,
     });
     if (result.error) {
       setError("Connexion Google impossible pour le moment.");
@@ -101,19 +102,21 @@ function AuthPage() {
   }
 
   // --- Compte passe-partout pour le test ---
-  function handleTestLogin() {
+  async function handleTestLogin() {
     // Active le mode "passe-partout" qui désactive la vérification des rôles
     enableOwnerMode();
     
     // Remplit les champs avec les identifiants du compte de test
     setMode("signin"); // S'assurer qu'on est en mode connexion
-    setEmail("test@kronodoc.ci");
-    setPassword("password123"); // Utiliser le mot de passe correct pour le compte de test
+    const testEmail = "test@kronodoc.ci";
+    const testPassword = "password123";
+    setEmail(testEmail);
+    setPassword(testPassword);
 
-    // Simule un clic sur le bouton de soumission du formulaire
-    // pour utiliser la même logique de connexion que l'utilisateur.
-    // On attend un court instant que React mette à jour l'état des champs avant de soumettre.
-    setTimeout(() => document.querySelector('form')?.requestSubmit(), 50);
+    // Appelle directement la logique de soumission au lieu de simuler un clic
+    // On passe les valeurs directement car l'état de React peut ne pas être mis à jour immédiatement
+    await supabase.auth.signInWithPassword({ email: testEmail, password: testPassword });
+    navigate({ to: search.redirect || getRoleHomePath("PROPRIETAIRE"), replace: true });
   }
 
   return (

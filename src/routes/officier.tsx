@@ -1,4 +1,5 @@
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft,
   Signature,
@@ -13,6 +14,7 @@ import {
   Eye,
   Fingerprint,
 } from "lucide-react";
+import { getQueue, updateDossierStatus, Dossier, recognizeDocument } from "@/lib/mock-data";
 import { SiteHeader } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
 import { SiteFooter } from "@/components/site-footer";
@@ -51,6 +53,21 @@ export const Route = createFileRoute("/officier")({
 });
 
 function OfficierPage() {
+  const router = useRouter();
+  const [dossiers, setDossiers] = useState<Dossier[]>(() => getQueue());
+  const [selectedDossier, setSelectedDossier] = useState<Dossier | null>(null);
+
+  const dossiersASigner = dossiers.filter(d => d.statut === 'signature');
+
+  useEffect(() => {
+    setSelectedDossier(dossiersASigner[0] || null);
+  }, [dossiers]);
+
+  const handleSignDossier = (dossierId: string) => {
+    updateDossierStatus(dossierId, 'valide');
+    setDossiers(getQueue()); // Rafraîchit la liste
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -90,7 +107,11 @@ function OfficierPage() {
             </div>
 
             {/* Aperçu tableau signatures */}
-            <SignaturePreview />
+            <SignaturePreview
+              dossiers={dossiersASigner}
+              onSelectDossier={setSelectedDossier}
+              selectedDossierId={selectedDossier?.id}
+            />
           </div>
         </div>
       </section>
@@ -143,7 +164,7 @@ function OfficierPage() {
             </p>
           </div>
 
-          <ConsoleMockup />
+          <ConsoleDetail dossier={selectedDossier} onSign={handleSignDossier} />
         </div>
       </section>
 
@@ -219,7 +240,17 @@ function SecCard({
   );
 }
 
-function SignaturePreview() {
+function SignaturePreview({
+  dossiers,
+  onSelectDossier,
+  selectedDossierId,
+}: {
+  dossiers: Dossier[];
+  onSelectDossier: (dossier: Dossier) => void;
+  selectedDossierId?: string;
+}) {
+  const previewDossiers = dossiers.slice(0, 3);
+
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elevated)]">
       <div className="flex items-center justify-between border-b border-border bg-muted/50 px-5 py-3">
@@ -228,22 +259,24 @@ function SignaturePreview() {
           À signer
         </div>
         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
-          8 dossiers
+          {dossiers.length} dossiers
         </span>
       </div>
       <ul className="divide-y divide-border">
-        {[
-          { name: "KOUASSI Adjoua", doc: "Certificat de résidence", time: "il y a 2 min" },
-          { name: "BAKARY Ouattara", doc: "Extrait de naissance", time: "il y a 8 min" },
-          { name: "AYA Tanoh", doc: "Certificat de vie", time: "il y a 14 min" },
-        ].map((it, i) => (
-          <li key={i} className="flex items-center justify-between px-5 py-3">
+        {previewDossiers.map((dossier) => (
+          <li
+            key={dossier.id}
+            onClick={() => onSelectDossier(dossier)}
+            className={`flex cursor-pointer items-center justify-between px-5 py-3 transition-colors ${
+              selectedDossierId === dossier.id ? 'bg-primary/5' : 'hover:bg-muted/50'
+            }`}
+          >
             <div>
               <div className="text-sm font-semibold text-foreground">
-                {it.doc}
+                {recognizeDocument(dossier.doc).label}
               </div>
               <div className="text-xs text-muted-foreground">
-                {it.name} · {it.time}
+                {dossier.nom} · il y a {Math.floor(Math.random() * 20) + 5} min
               </div>
             </div>
             <button className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm">
@@ -254,7 +287,7 @@ function SignaturePreview() {
       </ul>
       <div className="flex items-center justify-between border-t border-border bg-muted/40 px-5 py-3">
         <span className="text-xs text-muted-foreground">
-          + 5 autres en attente
+          {dossiers.length > 3 ? `+ ${dossiers.length - 3} autres en attente` : "Tous les dossiers affichés"}
         </span>
         <button className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
           Tout signer <CheckCircle2 className="h-3.5 w-3.5" />
@@ -264,7 +297,17 @@ function SignaturePreview() {
   );
 }
 
-function ConsoleMockup() {
+function ConsoleDetail({
+  dossier,
+  onSign
+}: {
+  dossier: Dossier | null;
+  onSign: (id: string) => void;
+}) {
+  if (!dossier) {
+    return <div className="mt-8 rounded-2xl border border-dashed bg-card p-10 text-center text-muted-foreground">Aucun dossier à signer pour le moment.</div>;
+  }
+
   return (
     <div className="mt-8 overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elevated)]">
       <div className="flex items-center gap-2 border-b border-border bg-muted/60 px-4 py-2.5">
@@ -285,7 +328,7 @@ function ConsoleMockup() {
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h3 className="font-display text-xl font-bold text-foreground">
-                Parapheur — 8 dossiers
+                Parapheur
               </h3>
               <p className="text-xs text-muted-foreground">
                 Trié par ancienneté · Mairie de Cocody
@@ -298,11 +341,10 @@ function ConsoleMockup() {
           </div>
 
           <div className="space-y-2">
-            <DossierRow name="KOUASSI Adjoua" doc="Certificat de résidence" ref="KD-2026-04128" agent="Yao K." active />
+            <DossierRow name={dossier.nom} doc={recognizeDocument(dossier.doc).label} ref={dossier.id} agent="Yao K." active />
+            {/* Vous pouvez ajouter d'autres dossiers ici pour la liste complète */}
             <DossierRow name="BAKARY Ouattara" doc="Extrait de naissance" ref="KD-2026-04127" agent="Diaby M." />
             <DossierRow name="AYA Tanoh" doc="Certificat de vie" ref="KD-2026-04126" agent="Yao K." />
-            <DossierRow name="KOUAMÉ N'guessan" doc="Certificat de célibat" ref="KD-2026-04125" agent="Traoré A." />
-            <DossierRow name="DIABATÉ Fatou" doc="Certificat de résidence" ref="KD-2026-04124" agent="Yao K." />
           </div>
         </div>
 
@@ -312,9 +354,9 @@ function ConsoleMockup() {
             Aperçu du dossier
           </div>
           <h4 className="mt-1 font-display text-base font-bold text-foreground">
-            Certificat de résidence
+            {recognizeDocument(dossier.doc).label}
           </h4>
-          <div className="mt-1 text-xs text-muted-foreground">KD-2026-04128</div>
+          <div className="mt-1 text-xs text-muted-foreground">{dossier.id}</div>
 
           {/* Mini document */}
           <div className="mt-4 rounded-lg border border-border bg-white p-4 shadow-sm">
@@ -326,12 +368,12 @@ function ConsoleMockup() {
                 Mairie de Cocody
               </div>
               <div className="mt-3 font-display text-sm font-black text-foreground">
-                CERTIFICAT DE RÉSIDENCE
+                {recognizeDocument(dossier.doc).label.toUpperCase()}
               </div>
             </div>
             <div className="mt-3 space-y-1 text-[10px] text-foreground">
-              <div>Nom : KOUASSI Adjoua Marie</div>
-              <div>Née le : 12/03/1991 à Bouaké</div>
+              <div>Nom : {dossier.nom}</div>
+              <div>Né(e) le : 12/03/1991 à Bouaké</div>
               <div>Réside à : Cocody Riviera Golf, Îlot 12, Lot 47</div>
             </div>
             <div className="mt-3 flex items-end justify-between">
@@ -358,7 +400,10 @@ function ConsoleMockup() {
           </div>
 
           <div className="mt-4 space-y-2">
-            <button className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90">
+            <button
+              onClick={() => onSign(dossier.id)}
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+            >
               <Signature className="h-4 w-4" />
               Signer et envoyer
             </button>

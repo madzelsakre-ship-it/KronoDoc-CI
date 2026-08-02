@@ -1,4 +1,5 @@
 import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft,
   ScanLine,
@@ -12,12 +13,13 @@ import {
   Home,
   CreditCard,
   ArrowRight,
+  Banknote,
   Search,
   Bell,
 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { supabase } from "@/integrations/supabase/client";
-import { getQueue, Dossier, recognizeDocument } from "@/lib/mock-data";
+import { getQueue, updateDossierStatus, Dossier, recognizeDocument } from "@/lib/mock-data";
 import { SiteFooter } from "@/components/site-footer";
 import { isRoleBypassEnabled } from "@/lib/role-guard";
 
@@ -57,6 +59,23 @@ export const Route = createFileRoute("/agent")({
 
 function AgentPage() {
   const router = useRouter();
+  const [dossiers, setDossiers] = useState<Dossier[]>(() => getQueue());
+  const [selectedDossier, setSelectedDossier] = useState<Dossier | null>(null);
+
+  // Sélectionne le premier dossier "en attente" au chargement
+  useEffect(() => {
+    const firstWaiting = dossiers.find(d => d.statut === 'en_attente');
+    setSelectedDossier(firstWaiting || dossiers[0] || null);
+  }, [dossiers]);
+
+  const handleUpdateDossier = (dossierId: string, newStatus: Dossier['statut']) => {
+    updateDossierStatus(dossierId, newStatus);
+    // Rafraîchit les données locales pour voir le changement
+    const updatedDossiers = getQueue();
+    setDossiers(updatedDossiers);
+    setSelectedDossier(updatedDossiers.find(d => d.id === dossierId) || null);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
@@ -96,10 +115,12 @@ function AgentPage() {
             </div>
 
             {/* Aperçu file d'attente */}
-            <QueuePreview onRefresh={() => {
-              // Force le re-rendu de la page pour afficher les nouvelles données
-              router.invalidate();
-            }} />
+            <QueuePreview
+              dossiers={dossiers.filter(d => d.statut === 'en_attente')}
+              onRefresh={() => router.invalidate()}
+              onSelectDossier={setSelectedDossier}
+              selectedDossierId={selectedDossier?.id}
+            />
           </div>
         </div>
       </section>
@@ -154,7 +175,11 @@ function AgentPage() {
             </p>
           </div>
 
-          <DossierMockup />
+          {selectedDossier ? (
+            <DossierDetail dossier={selectedDossier} onUpdateStatus={handleUpdateDossier} />
+          ) : (
+            <div className="mt-8 rounded-2xl border border-dashed bg-card p-10 text-center text-muted-foreground">Aucun dossier sélectionné.</div>
+          )}
         </div>
       </section>
 
@@ -225,9 +250,18 @@ function StepCard({
   );
 }
 
-function QueuePreview({ onRefresh }: { onRefresh: () => void }) {
-  // --- Lecture des données depuis la source partagée ---
-  const items = getQueue();
+function QueuePreview({
+  dossiers,
+  onRefresh,
+  onSelectDossier,
+  selectedDossierId,
+}: {
+  dossiers: Dossier[];
+  onRefresh: () => void;
+  onSelectDossier: (dossier: Dossier) => void;
+  selectedDossierId?: string;
+}) {
+  const items = dossiers;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elevated)]">
@@ -245,7 +279,13 @@ function QueuePreview({ onRefresh }: { onRefresh: () => void }) {
       </div>
       <ul className="divide-y divide-border">
         {items.map((it, i) => (
-          <li key={i} className="flex items-center justify-between px-5 py-3">
+          <li
+            key={it.id}
+            onClick={() => onSelectDossier(it)}
+            className={`flex cursor-pointer items-center justify-between px-5 py-3 transition-colors ${
+              selectedDossierId === it.id ? 'bg-primary/5' : 'hover:bg-muted/50'
+            }`}
+          >
             <div className="flex items-center gap-3">
               <div className="grid h-8 w-8 place-items-center rounded-full bg-muted text-xs font-semibold text-foreground">
                 {it.avatar}
@@ -282,7 +322,7 @@ function StatusPill({ status, color, textColor }: { status: Dossier['statut']; c
   );
 }
 
-function DossierMockup() {
+function DossierDetail({ dossier, onUpdateStatus }: { dossier: Dossier; onUpdateStatus: (id: string, status: Dossier['statut']) => void; }) {
   return (
     <div className="mt-8 overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elevated)]">
       {/* Barre navigateur */}
@@ -294,7 +334,7 @@ function DossierMockup() {
         </div>
         <div className="mx-auto flex items-center gap-2 rounded-md bg-card px-3 py-1 text-xs text-muted-foreground">
           <span className="h-1.5 w-1.5 rounded-full bg-success" />
-          agent.kronodoc.ci / dossier / #KD-2026-04128
+          agent.kronodoc.ci / dossier / #{dossier.id}
         </div>
       </div>
 
@@ -336,13 +376,13 @@ function DossierMockup() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Dossier #KD-2026-04128
+                Dossier #{dossier.id}
               </div>
               <h3 className="mt-1 font-display text-2xl font-bold text-foreground">
-                Renouvellement d'Extrait de naissance
+                {recognizeDocument(dossier.doc).label}
               </h3>
               <div className="mt-1 text-sm text-muted-foreground">
-                Reçu il y a 38 s · Timbre payé (Wave)
+                Reçu il y a {Math.floor(Math.random() * 60)} min · Timbre payé (Wave)
               </div>
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
@@ -359,13 +399,13 @@ function DossierMockup() {
                 <User className="h-3.5 w-3.5" />
                 Données citoyen (pré-remplies)
               </div>
-              <Field label="Nom" value="KOUASSI" />
-              <Field label="Prénom(s)" value="Adjoua Marie" />
-              <Field label="Née le" value="12 mars 1991 · Bouaké" />
+              <Field label="Nom" value={dossier.nom.split(' ')[0]} />
+              <Field label="Prénom(s)" value={dossier.nom.split(' ').slice(1).join(' ')} />
+              <Field label="Née le" value="12 mars 1991" />
               <Field label="N° Acte Original" value="1991/BKE/1234" />
               <Field label="Filiation" value="Père: K. Jean / Mère: A. Thérèse" />
-              <Field label="Type de document" value={recognizeDocument("extrait_naissance").label} />
-              <Field label="Conformité" value={recognizeDocument("extrait_naissance").status === "reconnu" ? "Document reconnu et conforme" : "Vérification humaine requise"} />
+              <Field label="Type de document" value={recognizeDocument(dossier.doc).label} />
+              <Field label="Conformité" value={recognizeDocument(dossier.doc).status === "reconnu" ? "Document reconnu et conforme" : "Vérification humaine requise"} />
             </div>
 
             {/* OCR + comparaison */}
@@ -381,7 +421,7 @@ function DossierMockup() {
               </div>
               <CheckItem
                 icon={<FileCheck2 className="h-3.5 w-3.5" />}
-                label="Ancien Acte (Scan)"
+                label={`${recognizeDocument(dossier.doc).requiredDocuments[0]} (Scan)`}
                 detail={`Document reconnu : ${recognizeDocument("extrait_naissance").requiredDocuments.join(" / ")}`}
                 ok
               />
@@ -409,20 +449,25 @@ function DossierMockup() {
               Originaux physiques présentés et conformes
             </label>
             <div className="flex flex-wrap items-center gap-2">
-              <button className="inline-flex items-center gap-1.5 rounded-md border border-destructive/20 bg-destructive/5 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10">
+              <button
+                onClick={() => onUpdateStatus(dossier.id, 'rejete')}
+                className="inline-flex items-center gap-1.5 rounded-md border border-destructive/20 bg-destructive/5 px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+              >
                 <XCircle className="h-4 w-4 text-destructive" />
                 Rejeter avec motif
               </button>
               {/* Pour un renouvellement, l'agent approuve et génère directement, sans passer par l'officier */}
-              <button className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90">
-                Approuver et Générer l'extrait
-                <ArrowRight className="h-4 w-4" />
-              </button>
               {/* Cas 2: Déclaration (Circuit Long) -> L'agent transmet à l'officier */}
-              {/* <button className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90">
-                Valider et Transmettre à l'Officier
-                <ArrowRight className="h-4 w-4" />
-              </button> */}
+              <button
+                onClick={() => onUpdateStatus(dossier.id, 'signature')}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+              >
+                {dossier.doc === 'birth_declaration' ? (
+                  <>Valider et Transmettre à l'Officier <ArrowRight className="h-4 w-4" /></>
+                ) : (
+                  <>Approuver et Générer l'extrait <ArrowRight className="h-4 w-4" /></>
+                )}
+              </button>
             </div>
           </div>
         </div>
