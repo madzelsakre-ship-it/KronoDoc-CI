@@ -17,6 +17,7 @@ import { Route as CitoyenRouteImport } from './routes/citoyen'
 import { Route as OfficierRouteImport } from './routes/officier'
 import { Route as VerifierRouteImport } from './routes/verifier'
 import { Route as AuthenticatedMonEspaceRouteImport } from './routes/_authenticated/mon-espace'
+import { Route as AuthenticatedMonProfilRouteImport } from './routes/_authenticated/mon-profil'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -57,6 +58,11 @@ const AuthenticatedMonEspaceRoute = AuthenticatedMonEspaceRouteImport.update({
   path: '/mon-espace',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMonProfilRoute = AuthenticatedMonProfilRouteImport.update({
+  id: '/mon-profil',
+  path: '/mon-profil',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/officier': typeof OfficierRoute
   '/verifier': typeof VerifierRoute
   '/mon-espace': typeof AuthenticatedMonEspaceRoute
+  '/mon-profil': typeof AuthenticatedMonProfilRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/officier': typeof OfficierRoute
   '/verifier': typeof VerifierRoute
   '/mon-espace': typeof AuthenticatedMonEspaceRoute
+  '/mon-profil': typeof AuthenticatedMonProfilRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/officier': typeof OfficierRoute
   '/verifier': typeof VerifierRoute
   '/_authenticated/mon-espace': typeof AuthenticatedMonEspaceRoute
+  '/_authenticated/mon-profil': typeof AuthenticatedMonProfilRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/officier'
     | '/verifier'
     | '/mon-espace'
+    | '/mon-profil'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/officier'
     | '/verifier'
     | '/mon-espace'
+    | '/mon-profil'
   id:
     | '__root__'
     | '/'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/officier'
     | '/verifier'
     | '/_authenticated/mon-espace'
+    | '/_authenticated/mon-profil'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -186,15 +198,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMonEspaceRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/mon-profil': {
+      id: '/_authenticated/mon-profil'
+      path: '/mon-profil'
+      fullPath: '/mon-profil'
+      preLoaderRoute: typeof AuthenticatedMonProfilRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedMonEspaceRoute: typeof AuthenticatedMonEspaceRoute
+  AuthenticatedMonProfilRoute: typeof AuthenticatedMonProfilRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMonEspaceRoute: AuthenticatedMonEspaceRoute,
+  AuthenticatedMonProfilRoute: AuthenticatedMonProfilRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

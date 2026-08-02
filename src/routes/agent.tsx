@@ -40,24 +40,16 @@ export const Route = createFileRoute("/agent")({
   }),
   // --- Sécurisation de la route ---
   // Ce bloc s'exécute avant que la page ne soit rendue.
-  beforeLoad: async ({ location }) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      throw redirect({
-        to: "/auth",
-        search: {
-          redirect: location.href,
-        },
-      });
-    }
-
+  beforeLoad: async ({ context }) => {
+    // La vérification de connexion est déjà faite par la route parente `_authenticated`.
+    // On vérifie uniquement le rôle ici.
     if (isRoleBypassEnabled()) {
       return;
     }
 
-    const userRole = session.user?.user_metadata?.role;
+    const userRole = context.user?.user_metadata?.role;
     if (userRole !== "AGENT" && userRole !== "OFFICIER") {
-      throw redirect({ to: "/citoyen" });
+      throw redirect({ to: "/_authenticated/citoyen" });
     }
   },
   component: AgentPage,

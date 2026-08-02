@@ -20,6 +20,7 @@ import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import { useSession } from "@/hooks/use-session";
 import { PaymentMethod, getUserById } from "@/lib/mock-data"; // Assumons que c'est la bonne façon de récupérer le profil
+import { supabase } from "@/integrations/supabase/client";
 import { isDevTestModeEnabled, setDevTestMode } from "@/lib/test-mode";
 import { canAccessRoute, getUserRole } from "@/lib/role-guard";
 
@@ -33,21 +34,13 @@ export const Route = createFileRoute("/citoyen")({
       },
     ],
   }),
-  beforeLoad: async ({ location }) => {
-    const { data } = await supabase.auth.getSession();
-
-    if (!data.session) {
-      throw redirect({
-        to: "/auth",
-        search: { redirect: location.href },
-      });
-    }
-
+  beforeLoad: async ({ context }) => {
+    // La vérification de connexion est déjà faite par la route parente `_authenticated`.
     // On appelle getUserRole SEULEMENT si la session existe.
-    const role = getUserRole(data.session.user);
+    const role = getUserRole(context.user);
 
     if (!canAccessRoute(role, "/citoyen")) {
-      throw redirect({ to: "/agent" });
+      throw redirect({ to: "/_authenticated/agent" });
     }
   },
   component: CitoyenPage,
@@ -80,6 +73,7 @@ const SERVICES_DATA = {
           { id: "full_birth_copy", name: "Copie intégrale d'acte de naissance", time: "1-2 jours", price: "1500 FCFA" },
           { id: "document_legalisation", name: "Légalisation de document", time: "2-3 jours", price: "1500 FCFA" },
           { id: "death_extract", name: "Extrait d'acte de décès", time: "< 5 min", price: "1000 FCFA" },
+          { id: "laissez_passer", name: "Laissez-passer", time: "1-2 jours", price: "3000 FCFA" },
         ],
       },
     ],
@@ -343,6 +337,20 @@ const DOCUMENT_FORM_CONFIG: Record<string, {
     attachments: [
       { label: "Photo / scan de la CNI ou attestation d'identité", required: true, accept: "image/*,.pdf" },
       { label: "Photo / scan de l'extrait d'acte de naissance", required: true, accept: "image/*,.pdf" },
+    ],
+  },
+  laissez_passer: {
+    title: "Demande de Laissez-passer",
+    intro: "Ce document est requis pour certains déplacements spécifiques. Veuillez fournir les informations et justificatifs.",
+    fields: [
+      { key: "nom_demandeur", label: "Nom et prénom(s) du demandeur", type: "text", placeholder: "Nom complet" },
+      { key: "motif_deplacement", label: "Motif du déplacement", type: "textarea", placeholder: "Ex: Voyage humanitaire, rapatriement, etc." },
+      { key: "destination", label: "Destination (Pays, Ville)", type: "text", placeholder: "Ex: France, Paris" },
+      { key: "date_depart", label: "Date de départ prévue", type: "date" },
+    ],
+    attachments: [
+      { label: "CNI ou Passeport du demandeur", required: true, accept: "image/*,.pdf" },
+      { label: "Justificatif de déplacement (billet d'avion, convocation...)", required: true, accept: "image/*,.pdf" },
     ],
   },
 };

@@ -102,13 +102,18 @@ function AuthPage() {
 
   // --- Compte passe-partout pour le test ---
   function handleTestLogin() {
-    // Remplit les champs avec les identifiants de test
+    // Active le mode "passe-partout" qui désactive la vérification des rôles
+    enableOwnerMode();
+    
+    // Remplit les champs avec les identifiants du compte de test
+    setMode("signin"); // S'assurer qu'on est en mode connexion
     setEmail("test@kronodoc.ci");
-    setPassword("password");
+    setPassword("password123"); // Utiliser le mot de passe correct pour le compte de test
+
     // Simule un clic sur le bouton de soumission du formulaire
     // pour utiliser la même logique de connexion que l'utilisateur.
-    const form = document.querySelector('form');
-    if (form) form.requestSubmit();
+    // On attend un court instant que React mette à jour l'état des champs avant de soumettre.
+    setTimeout(() => document.querySelector('form')?.requestSubmit(), 50);
   }
 
   return (

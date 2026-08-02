@@ -9,6 +9,21 @@ export const Route = createFileRoute("/_authenticated")({
     if (error || !data.user) {
       throw redirect({ to: "/auth", search: { redirect: location.href } });
     }
+
+    // --- VÉRIFICATION DU PROFIL COMPLET (POUR TOUS LES RÔLES) ---
+    // On vérifie si le profil est complet avant de donner accès aux autres pages.
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("first_name, last_name")
+      .eq("id", data.user.id)
+      .single();
+
+    const isProfileIncomplete = !profile || !profile.first_name || !profile.last_name;
+
+    if (isProfileIncomplete && location.pathname !== "/mon-profil") {
+      throw redirect({ to: "/mon-profil", search: { redirect: location.href } });
+    }
+
     return { ...context, user: data.user };
   },
   component: () => <Outlet />,

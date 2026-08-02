@@ -36,24 +36,15 @@ export const Route = createFileRoute("/officier")({
     ],
   }),
   // --- Sécurisation de la route ---
-  beforeLoad: async ({ location }) => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      throw redirect({
-        to: "/auth",
-        search: {
-          redirect: location.href,
-        },
-      });
-    }
-
+  beforeLoad: async ({ context }) => {
+    // La vérification de connexion est déjà faite par la route parente `_authenticated`.
     if (isRoleBypassEnabled()) {
       return;
     }
 
-    const userRole = data.session.user?.user_metadata?.role;
+    const userRole = context.user?.user_metadata?.role;
     if (userRole !== "OFFICIER") {
-      throw redirect({ to: "/citoyen" });
+      throw redirect({ to: "/_authenticated/citoyen" });
     }
   },
   component: OfficierPage,
